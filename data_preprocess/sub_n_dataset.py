@@ -39,9 +39,9 @@ def create_subset_parquet(input_path, output_path, n=2048):
 
 if __name__ == "__main__":
     # Input and output paths
-    input_path = "./data_addPrompt/add_test_source_p_selected_final_27Jun.parquet"
-    output_path = "./data_addPrompt/_test_nqp600_p.parquet"
-    n = 600  # Number of rows to extract
+    input_path = "./data_addPrompt/add_test_p.parquet"
+    output_path = "./data_addPrompt/_test_p.parquet"
+    n = 2048 # Number of rows to extract | Create sub dataset to debug your code
 
     # Start processing
     create_subset_parquet(input_path, output_path, n)

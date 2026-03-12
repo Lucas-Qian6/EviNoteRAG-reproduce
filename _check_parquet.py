@@ -1,7 +1,7 @@
 import pandas as pd
 
 # read data
-df = pd.read_parquet('./data_preprocess/data/m_add_test_source_p_selected_final_30Jun.parquet')
+df = pd.read_parquet('./data_preprocess/data/m_test.parquet')
 
 # select the first data
 row = df.iloc[0]

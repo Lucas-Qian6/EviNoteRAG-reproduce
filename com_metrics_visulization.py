@@ -176,11 +176,11 @@ class MultiMetricsVisualizer:
 def main():
     """Parse arguments and run visualization"""
     parser = argparse.ArgumentParser(description="Metric Comparison Visualization Across Multiple Files")
-    parser.add_argument('--directory', default = "./outputs/_final_results_nqp600/todraw/",
+    parser.add_argument('--directory', default = "./outputs/_final_results/todraw/",
                         help="Path to the directory containing JSONL files")
     parser.add_argument('--metric',  default = "val/test_score/nq_val_em",
                         help="Name of the metric to compare (e.g., 'val/test_score/nq_val_em')")
-    parser.add_argument('--output', default="./outputs/_final_results_nqp600/nq600_vis_com_metrics",
+    parser.add_argument('--output', default="./outputs/_final_results/vis_com_metrics",
                         elp="Directory to save output image (optional)")
     
     args = parser.parse_args()

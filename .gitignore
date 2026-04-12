@@ -13,3 +13,4 @@ train_grpo_16gpus_ours.sh
 debug/
 ossutil_output/
 data_preprocess/data/
+.DS_Store

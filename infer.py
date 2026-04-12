@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 # Model ID and device setup
 # model_id = "your/model/path"
-model_id = '/root/verl_checkpoints/local/actor/global_step_50'
+model_id = args.model_id
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 question = question.strip()

@@ -10,8 +10,7 @@
 # ── Paths (edit these to match your setup) ───────────────────────────────────
 BM25_INDEX="/finder/qyj/sparse_retriever/bm25"
 CORPUS="/finder/qyj/sparse_retriever/wiki-18.jsonl"
-MODEL="dayll/EviNoteRAG-7B"   # HuggingFace ID (downloads automatically),
-                               # or local path like /root/finder/qyj/models/EviNoteRAG-7B
+MODEL="/finder/qyj/models/EviNoteRAG-7B"
 
 # ── Step 1: Start the BM25 retriever (run in Terminal 1) ────────────────────
 # conda activate retriever

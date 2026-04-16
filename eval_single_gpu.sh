@@ -8,8 +8,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Paths (edit these to match your setup) ───────────────────────────────────
-BM25_INDEX="/root/finder/qyj/sparse_retriever/bm25"
-CORPUS="/root/finder/qyj/sparse_retriever/wiki-18.jsonl"
+BM25_INDEX="/finder/qyj/sparse_retriever/bm25"
+CORPUS="/finder/qyj/sparse_retriever/wiki-18.jsonl"
 MODEL="dayll/EviNoteRAG-7B"   # HuggingFace ID (downloads automatically),
                                # or local path like /root/finder/qyj/models/EviNoteRAG-7B
 

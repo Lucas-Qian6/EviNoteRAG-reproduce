@@ -132,10 +132,10 @@ def build_prompt(question):
     ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.
     - For each `<information>Search result</information>`, provide a summarized version in `<summary>`, using the above markers to indicate key or uncertain information.
-    - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
-    - If it's a yes/no question, respond only with `yes` or `no`.
+    - Only output the final answer inside `<answer></answer>`. The answer should be the specific name, date, number, place, or fact that directly answers the question. Do not include explanations, reasoning, or extra text.
     - Always follow this format strictly.
     - **Answer must be in English. Only English responses will be accepted.**
+    - You MUST search for evidence before answering. Do NOT answer based on your own knowledge.
     Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
     Question: {question}
     """
@@ -269,7 +269,8 @@ def main():
         return
 
     # ── Load data ────────────────────────────────────────────────────────
-    print(f"Loading TriviaQA validation data ({args.num_samples} samples)...")
+    label = f"{args.num_samples} samples" if args.num_samples else "full val set"
+    print(f"Loading TriviaQA validation data ({label})...")
     data = load_triviaqa(args.num_samples)
     print(f"  Loaded {len(data)} questions")
 

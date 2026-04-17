@@ -136,13 +136,17 @@ def build_prompt(question):
     ## Format Instructions
     - Use `<search>Your query</search>` to call the search tool.
     - After each `<information>Search result</information>`, write a `<claims>` section following the steps above.
-    - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
-    - If it's a yes/no question, respond only with `yes` or `no`.
+    - After organizing your claims, put the **specific factual answer** to the question inside `<answer></answer>`. The answer should be the concrete name, date, number, place, or fact that directly answers the question — NOT "yes" or "no".
     - Always follow this format strictly.
     - **Answer must be in English. Only English responses will be accepted.**
+    - You MUST search for evidence before answering. Do NOT answer based on your own knowledge.
 
-    ## Example `<claims>` section:
-    ```
+    ## Example:
+    Question: When was the Golden Gate Bridge completed?
+
+    <search>Golden Gate Bridge completion date</search>
+    [receives <information>...</information>]
+
     <claims>
     Extracted claims:
     - C1 [Doc1]: "The bridge was completed in 1937."
@@ -155,9 +159,10 @@ def build_prompt(question):
 
     Organized evidence: The bridge's construction finished in late 1936 (C2), with official completion in 1937 (C1). It spans 4,200 feet (C3).
     </claims>
-    ```
 
-    Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering.
+    <answer>1937</answer>
+
+    Note: No searches allowed after answer submission. So avoid answering when uncertain – search more to verify.
     Question: {question}
     """
 

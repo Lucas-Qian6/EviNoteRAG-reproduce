@@ -240,8 +240,8 @@ def main():
     parser = argparse.ArgumentParser(description="Single-GPU EviNote-RAG evaluation")
     parser.add_argument("--model_id", type=str, required=True,
                         help="HuggingFace model ID or local path")
-    parser.add_argument("--num_samples", type=int, default=200,
-                        help="Number of TriviaQA questions to evaluate")
+    parser.add_argument("--num_samples", type=int, default=None,
+                        help="Number of TriviaQA questions (None = full val set)")
     parser.add_argument("--max_turns", type=int, default=4,
                         help="Max search turns per question")
     parser.add_argument("--topk", type=int, default=3,

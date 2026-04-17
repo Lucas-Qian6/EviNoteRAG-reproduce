@@ -265,7 +265,8 @@ def load_triviaqa(num_samples=None):
 def main():
     parser = argparse.ArgumentParser(description="Claim-level evidence organization eval")
     parser.add_argument("--model_id", type=str, required=True)
-    parser.add_argument("--num_samples", type=int, default=200)
+    parser.add_argument("--num_samples", type=int, default=None,
+                        help="Number of TriviaQA questions (None = full val set)")
     parser.add_argument("--max_turns", type=int, default=4)
     parser.add_argument("--topk", type=int, default=3)
     parser.add_argument("--retriever_url", type=str,

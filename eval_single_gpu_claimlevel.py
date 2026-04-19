@@ -124,14 +124,16 @@ def build_prompt(question):
 
     ### Step 3: Identify claim-claim relationships
     For each pair of relevant claims, classify their relationship:
-    - **support**: Claims reinforce or corroborate each other
-    - **contradict**: Claims conflict or provide incompatible information
-    - **independent**: Claims address different aspects of the question
+    - **corroborates**: Claims reinforce each other, stating the same or very similar facts
+    - **contradicts**: Claims conflict or provide incompatible information
+    - **complements**: Claims address different aspects of the question without overlapping
+    - **subsumes**: One claim is more specific than the other on the same point
 
     ### Step 4: Resolve and organize
-    - **Contradicting claims**: Prefer more specific over vague; separate different events or time scopes; if unresolvable, keep both and note the conflict
-    - **Supporting claims**: Merge into a consolidated statement
-    - **Independent claims**: Keep as separate points
+    - **Corroborating claims**: Merge into a single consolidated statement with stronger support
+    - **Contradicting claims**: Separate and compare; prefer more specific over vague; distinguish different events or time scopes; if genuinely unresolvable, keep both and explicitly note the conflict
+    - **Complementary claims**: Keep both as separate points, organize them together by topic
+    - **Subsumption**: Prefer the more specific claim, compress or drop the generic one
 
     ## Format Instructions
     - Use `<search>Your query</search>` to call the search tool.
@@ -142,25 +144,37 @@ def build_prompt(question):
     - You MUST search for evidence before answering. Do NOT answer based on your own knowledge.
 
     ## Example:
-    Question: When was the Golden Gate Bridge completed?
+    Question: When did construction of the Golden Gate Bridge begin and end?
 
-    <search>Golden Gate Bridge completion date</search>
+    <search>Golden Gate Bridge construction dates</search>
     [receives <information>...</information>]
 
     <claims>
     Extracted claims:
-    - C1 [Doc1]: "The bridge was completed in 1937."
-    - C2 [Doc2]: "Construction finished in late 1936."
-    - C3 [Doc1]: "The bridge spans 4,200 feet."
+    - C1 [Doc1]: "Construction of the Golden Gate Bridge began on January 5, 1933."
+    - C2 [Doc2]: "The Golden Gate Bridge project started in 1933."
+    - C3 [Doc1]: "The bridge was completed and opened on May 27, 1937."
+    - C4 [Doc2]: "The bridge opened in April 1937."
+    - C5 [Doc2]: "The bridge was designed by Joseph Strauss."
 
-    Relevance: C1 relevant, C2 relevant, C3 relevant.
-    Relationships: C1-C2 contradict (completion date differs). C3 independent.
-    Resolution: C1 vs C2 — C2 may refer to structural completion vs official opening in C1. Keep both, note distinction.
+    Relevance: C1 relevant, C2 relevant, C3 relevant, C4 relevant, C5 irrelevant (question asks about dates, not designer).
+    Drop: C5.
 
-    Organized evidence: The bridge's construction finished in late 1936 (C2), with official completion in 1937 (C1). It spans 4,200 feet (C3).
+    Relationships:
+    - C1-C2 corroborates (both say construction started in 1933)
+    - C3-C4 contradicts (opening date differs: May vs April 1937)
+    - C1-C3 complements (start date vs end date)
+    - C1-C2 subsumes (C1 gives exact date Jan 5 1933, C2 only says 1933)
+
+    Resolution:
+    - C1+C2: Merge. C1 subsumes C2, use "January 5, 1933".
+    - C3 vs C4: C3 is more specific (exact date May 27). Prefer C3, note discrepancy.
+    - C1 and C3 complement each other (start vs end).
+
+    Organized evidence: Construction began on January 5, 1933 (C1, corroborated by C2). The bridge was completed and opened on May 27, 1937 (C3; C4 says April 1937 but is less specific).
     </claims>
 
-    <answer>1937</answer>
+    <answer>Construction began on January 5, 1933 and the bridge opened on May 27, 1937.</answer>
 
     Note: No searches allowed after answer submission. So avoid answering when uncertain – search more to verify.
     Question: {question}

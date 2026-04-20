@@ -114,75 +114,32 @@ def build_prompt(question):
     if not question.endswith("?"):
         question += "?"
     return f"""
-    ## Background Information
-    # Role Definition
+    ## Background Information  
+    # Role Definition  
     You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
     You should continue searching until all the required information has been retrieved, and then provide the final answer.
 
-    ## Claim-Level Evidence Organization Rules
-    After retrieving information enclosed in `<information>`, you MUST organize the evidence using claim-level analysis in a `<claims>` section before answering:
+    ## Claim-Level Evidence Organization Rules  
+    When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
 
-    ### Step 1: Decompose into atomic claims
-    Extract each distinct factual statement from the retrieved documents. Label each with its source.
+    Steps:
+    1. **Decompose**: extract each distinct factual statement as a separate claim, labeled with its source (e.g. `C1 [Doc1]`).
+    2. **Filter**: drop claims that are not relevant to the question.
+    3. **Relate**: for pairs of relevant claims, mark one of:
+       - **corroborates**: claims reinforce each other (same or near-identical fact).
+       - **contradicts**: claims conflict or give incompatible information.
+       - **complements**: claims address different aspects of the question without overlap.
+       - **subsumes**: one claim is strictly more specific than the other on the same point.
+    4. **Resolve**: merge corroborating claims into one; on contradiction prefer the more specific claim and note the conflict; keep complementary claims as separate points; on subsumption keep the more specific claim and drop the generic one.
 
-    ### Step 2: Assess relevance
-    For each claim, determine if it is relevant to the question. Drop irrelevant claims.
-
-    ### Step 3: Identify claim-claim relationships
-    For each pair of relevant claims, classify their relationship:
-    - **corroborates**: Claims reinforce each other, stating the same or very similar facts
-    - **contradicts**: Claims conflict or provide incompatible information
-    - **complements**: Claims address different aspects of the question without overlapping
-    - **subsumes**: One claim is more specific than the other on the same point
-
-    ### Step 4: Resolve and organize
-    - **Corroborating claims**: Merge into a single consolidated statement with stronger support
-    - **Contradicting claims**: Separate and compare; prefer more specific over vague; distinguish different events or time scopes; if genuinely unresolvable, keep both and explicitly note the conflict
-    - **Complementary claims**: Keep both as separate points, organize them together by topic
-    - **Subsumption**: Prefer the more specific claim, compress or drop the generic one
-
-    ## Format Instructions
+    ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.
-    - After each `<information>Search result</information>`, write a `<claims>` section following the steps above.
-    - After organizing your claims, put the **specific factual answer** to the question inside `<answer></answer>`. The answer should be the concrete name, date, number, place, or fact that directly answers the question - NOT "yes" or "no".
+    - For each `<information>Search result</information>`, provide a structured version in `<summary>`, following the steps above.
+    - Only output the final answer inside `<answer></answer>`. The answer should be the specific name, date, number, place, or fact that directly answers the question. Do not include explanations, reasoning, or extra text.
     - Always follow this format strictly.
     - **Answer must be in English. Only English responses will be accepted.**
     - You MUST search for evidence before answering. Do NOT answer based on your own knowledge.
-
-    ## Example:
-    Question: When did construction of the Golden Gate Bridge begin and end?
-
-    <search>Golden Gate Bridge construction dates</search>
-    [receives <information>...</information>]
-
-    <claims>
-    Extracted claims:
-    - C1 [Doc1]: "Construction of the Golden Gate Bridge began on January 5, 1933."
-    - C2 [Doc2]: "The Golden Gate Bridge project started in 1933."
-    - C3 [Doc1]: "The bridge was completed and opened on May 27, 1937."
-    - C4 [Doc2]: "The bridge opened in April 1937."
-    - C5 [Doc2]: "The bridge was designed by Joseph Strauss."
-
-    Relevance: C1 relevant, C2 relevant, C3 relevant, C4 relevant, C5 irrelevant (question asks about dates, not designer).
-    Drop: C5.
-
-    Relationships:
-    - C1-C2 corroborates (both say construction started in 1933)
-    - C3-C4 contradicts (opening date differs: May vs April 1937)
-    - C1-C3 complements (start date vs end date)
-    - C1-C2 subsumes (C1 gives exact date Jan 5 1933, C2 only says 1933)
-
-    Resolution:
-    - C1+C2: Merge. C1 subsumes C2, use "January 5, 1933".
-    - C3 vs C4: C3 is more specific (exact date May 27). Prefer C3, note discrepancy.
-    - C1 and C3 complement each other (start vs end).
-
-    Organized evidence: Construction began on January 5, 1933 (C1, corroborated by C2). The bridge was completed and opened on May 27, 1937 (C3; C4 says April 1937 but is less specific).
-    </claims>
-
-    <answer>Construction began on January 5, 1933 and the bridge opened on May 27, 1937.</answer>
-
-    Note: No searches allowed after answer submission. So avoid answering when uncertain - search more to verify.
+    Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
     Question: {question}
     """
 

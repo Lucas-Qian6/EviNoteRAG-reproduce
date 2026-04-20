@@ -114,7 +114,7 @@ def build_prompt(question):
     You should continue searching until all the required information has been retrieved, and then provide the final answer.
 
     ## Claim-Level Evidence Organization Rules  
-    When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<claims>` block.
+    When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
 
     Steps:
     1. **Decompose**: extract each distinct factual statement as a separate claim, labeled with its source (e.g. `C1 [Doc1]`).
@@ -128,7 +128,7 @@ def build_prompt(question):
 
     ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.
-    - For each `<information>Search result</information>`, provide a structured version in `<claims>`, following the steps above.
+    - For each `<information>Search result</information>`, provide a structured version in `<summary>`, following the steps above.
     - Only output the final answer inside `<answer></answer>`. The answer should be the specific name, date, number, place, or fact that directly answers the question. Do not include explanations, reasoning, or extra text.
     - Always follow this format strictly.
     - **Answer must be in English. Only English responses will be accepted.**

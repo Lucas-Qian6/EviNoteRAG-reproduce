@@ -206,8 +206,8 @@ PIPELINES = {
     },
     "claim": {
         "build_prompt": build_prompt_claim,
-        "max_new_tokens_main": 2048,
-        "max_new_tokens_final": 1024,
+        "max_new_tokens_main": 10240,
+        "max_new_tokens_final": 5120,
     },
 }
 

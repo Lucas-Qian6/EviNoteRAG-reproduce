@@ -7,7 +7,7 @@ export NCCL_SOCKET_IFNAME=eth0
 ray start --head
 
 
-export BASE_MODEL='your/model/path'
+export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG-7B'
 WAND_PROJECT='eval_EviNoteRAG' 
 EXPERIMENT_NAME='eval'
 

@@ -1,17 +1,30 @@
 """
-Single-GPU batch evaluation for EviNote-RAG on TriviaQA.
-Adapted from infer.py to loop over a dataset and compute F1/EM scores.
+Single-GPU / single-process batch evaluation for EviNote-RAG on TriviaQA.
+
+Supports two backends:
+  - local: a HuggingFace causal LM loaded on a local GPU (default).
+  - gemini: any Gemini-compatible chat completion API exposed through the
+            google-genai SDK (e.g. Gemini-3-flash served via gpugeek).
 
 Usage:
-  1. Start the BM25 retriever server in a separate terminal (with `retriever` conda env):
+  1. Start the retriever server in a separate terminal (BM25 or dense e5).
        python RAG/search/retrieval_server.py \
          --retriever_name bm25 \
          --index_path /root/finder/qyj/sparse_retriever/bm25 \
          --corpus_path /root/finder/qyj/sparse_retriever/wiki-18.jsonl \
          --topk 3
 
-  2. Run evaluation (with `EviNoteRAG` conda env):
+  2a. Local model (default):
        python eval_single_gpu.py --model_id dayll/EviNoteRAG-7B --num_samples 200
+
+  2b. Gemini API (e.g. via gpugeek):
+       export GEMINI_API_KEY=...
+       python eval_single_gpu.py \
+         --backend gemini \
+         --gemini_model Vendor2/Gemini-3-flash \
+         --gemini_base_url https://api.gpugeek.com \
+         --gemini_api_version v1beta \
+         --num_samples 200
 """
 
 import argparse
@@ -21,8 +34,6 @@ import re
 import string
 import time
 
-import torch
-import transformers
 import requests
 from datasets import load_dataset
 from tqdm import tqdm
@@ -141,10 +152,21 @@ def build_prompt(question):
     """
 
 
-# ── Stopping criteria (same as infer.py) ────────────────────────────────────
+# ── Local-model inference (HuggingFace causal LM) ────────────────────────────
 
-class StopOnSequence(transformers.StoppingCriteria):
+def _local_imports():
+    """Lazy import torch/transformers so the gemini backend doesn't need them."""
+    import torch
+    import transformers
+    return torch, transformers
+
+
+class StopOnSequence:
+    """Built lazily to avoid importing transformers at module level."""
+
     def __init__(self, target_sequences, tokenizer):
+        torch, transformers = _local_imports()
+        self.torch = torch
         self.target_ids = [
             tokenizer.encode(seq, add_special_tokens=False)
             for seq in target_sequences
@@ -152,21 +174,20 @@ class StopOnSequence(transformers.StoppingCriteria):
         self.target_lengths = [len(t) for t in self.target_ids]
 
     def __call__(self, input_ids, scores, **kwargs):
-        targets = [torch.as_tensor(t, device=input_ids.device) for t in self.target_ids]
+        targets = [self.torch.as_tensor(t, device=input_ids.device) for t in self.target_ids]
         if input_ids.shape[1] < min(self.target_lengths):
             return False
         for i, target in enumerate(targets):
-            if torch.equal(input_ids[0, -self.target_lengths[i]:], target):
+            if self.torch.equal(input_ids[0, -self.target_lengths[i]:], target):
                 return True
         return False
 
 
-# ── Agentic inference loop ───────────────────────────────────────────────────
-
-def run_inference(
+def run_inference_local(
     prompt, model, tokenizer, device, stopping_criteria,
     curr_eos, max_turns=4, topk=3, retriever_url="http://127.0.0.1:8000/retrieve",
 ):
+    torch, _ = _local_imports()
     search_template = "\n\n{output_text}<information>{search_results}</information>\n\n"
     turns = 0
 
@@ -219,6 +240,120 @@ def run_inference(
     return prompt, turns
 
 
+# ── Gemini-API inference (google-genai SDK) ──────────────────────────────────
+
+def make_gemini_client(api_key, base_url, api_version):
+    """Build a google-genai client. Imports the SDK lazily."""
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as exc:
+        raise RuntimeError(
+            "The 'google-genai' package is required for --backend gemini. "
+            "Install it with: pip install -q -U google-genai"
+        ) from exc
+
+    http_kwargs = {}
+    if base_url:
+        http_kwargs["base_url"] = base_url
+    if api_version:
+        http_kwargs["api_version"] = api_version
+
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(**http_kwargs) if http_kwargs else None,
+    )
+    return client, types
+
+
+def gemini_generate(client, types_mod, model_id, prompt, max_output_tokens,
+                    stop_sequences=None, temperature=0.0,
+                    max_retries=3, retry_delay=2.0):
+    """Single Gemini call with simple exponential-backoff retry on failure."""
+    cfg_kwargs = {
+        "max_output_tokens": max_output_tokens,
+        "temperature": temperature,
+    }
+    if stop_sequences:
+        cfg_kwargs["stop_sequences"] = list(stop_sequences)
+
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types_mod.GenerateContentConfig(**cfg_kwargs),
+            )
+            return response.text or ""
+        except Exception as exc:
+            last_exc = exc
+            if attempt == max_retries - 1:
+                break
+            time.sleep(retry_delay * (2 ** attempt))
+
+    raise RuntimeError(f"Gemini API call failed after {max_retries} attempts: {last_exc}")
+
+
+def run_inference_gemini(
+    initial_prompt, client, types_mod, model_id,
+    max_turns=4, topk=3, retriever_url="http://127.0.0.1:8000/retrieve",
+    max_new_tokens_main=1024, max_new_tokens_final=512,
+):
+    """Same agentic loop as the local backend, but driven by Gemini API calls.
+
+    The model is expected to emit `<search>...</search>` to query the retriever
+    and `<answer>...</answer>` for the final answer. We pass `</search>` as a
+    stop sequence; when the API truncates, we re-append `</search>` so the rest
+    of the pipeline (regex extractor) can read it back.
+    """
+    prompt = initial_prompt
+    turns = 0
+    search_template = "\n\n{output_text}<information>{search_results}</information>\n\n"
+
+    while True:
+        output_text = gemini_generate(
+            client, types_mod, model_id, prompt,
+            max_output_tokens=max_new_tokens_main,
+            stop_sequences=["</search>"],
+        )
+
+        last_open = output_text.rfind("<search>")
+        last_close = output_text.rfind("</search>")
+        last_answer_close = output_text.rfind("</answer>")
+
+        stopped_for_search = (
+            last_open > last_close
+            and last_open > last_answer_close
+        )
+
+        if stopped_for_search:
+            output_text = output_text + "</search>"
+
+        if not stopped_for_search:
+            prompt += output_text
+            break
+
+        tmp_query = get_query(output_text)
+        if tmp_query:
+            search_results = search(tmp_query, topk=topk, retriever_url=retriever_url)
+        else:
+            search_results = ""
+
+        prompt += search_template.format(output_text=output_text, search_results=search_results)
+        turns += 1
+
+        if turns >= max_turns:
+            output_text = gemini_generate(
+                client, types_mod, model_id, prompt,
+                max_output_tokens=max_new_tokens_final,
+            )
+            prompt += output_text
+            break
+
+    return prompt, turns
+
+
 # ── Data loading ─────────────────────────────────────────────────────────────
 
 def load_triviaqa(num_samples=None):
@@ -238,8 +373,22 @@ def load_triviaqa(num_samples=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Single-GPU EviNote-RAG evaluation")
-    parser.add_argument("--model_id", type=str, required=True,
-                        help="HuggingFace model ID or local path")
+    parser.add_argument("--backend", type=str, default="local",
+                        choices=["local", "gemini"],
+                        help="Model backend: local HF causal LM or Gemini-compatible API")
+
+    parser.add_argument("--model_id", type=str, default=None,
+                        help="HuggingFace model ID or local path (required for --backend local)")
+
+    parser.add_argument("--gemini_model", type=str, default="Vendor2/Gemini-3-flash",
+                        help="Model name to send to the Gemini API (e.g. Vendor2/Gemini-3-flash)")
+    parser.add_argument("--gemini_api_key", type=str, default=os.environ.get("GEMINI_API_KEY"),
+                        help="API key (defaults to $GEMINI_API_KEY)")
+    parser.add_argument("--gemini_base_url", type=str, default="https://api.gpugeek.com",
+                        help="Override the API base URL (use for OpenAI-compatible gateways like gpugeek)")
+    parser.add_argument("--gemini_api_version", type=str, default="v1beta",
+                        help="API version for HttpOptions (gpugeek expects v1beta)")
+
     parser.add_argument("--num_samples", type=int, default=None,
                         help="Number of TriviaQA questions (None = full val set)")
     parser.add_argument("--max_turns", type=int, default=4,
@@ -254,13 +403,18 @@ def main():
                         help="Resume from this question index (0-based)")
     args = parser.parse_args()
 
+    if args.backend == "local" and not args.model_id:
+        parser.error("--model_id is required when --backend local")
+    if args.backend == "gemini" and not args.gemini_api_key:
+        parser.error("--gemini_api_key is required when --backend gemini "
+                     "(or set $GEMINI_API_KEY)")
+
     os.makedirs(args.output_dir, exist_ok=True)
     output_file = os.path.join(args.output_dir, "triviaqa_results.jsonl")
 
-    # ── Retriever health check ───────────────────────────────────────────
     print("Checking retriever server...")
     try:
-        test = search("test query", topk=1, retriever_url=args.retriever_url)
+        search("test query", topk=1, retriever_url=args.retriever_url)
         print("  Retriever is up.")
     except Exception as e:
         print(f"  ERROR: Cannot reach retriever at {args.retriever_url}")
@@ -268,33 +422,50 @@ def main():
         print("  Start the retriever server first (see eval_single_gpu.sh).")
         return
 
-    # ── Load data ────────────────────────────────────────────────────────
     label = f"{args.num_samples} samples" if args.num_samples else "full val set"
     print(f"Loading TriviaQA validation data ({label})...")
     data = load_triviaqa(args.num_samples)
     print(f"  Loaded {len(data)} questions")
 
-    # ── Load model ───────────────────────────────────────────────────────
-    print(f"Loading model: {args.model_id}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_id)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        args.model_id, torch_dtype=torch.bfloat16, device_map="auto"
-    )
-    model.eval()
-    print(f"  Model loaded on {device}")
+    if args.backend == "local":
+        torch, transformers = _local_imports()
+        print(f"Loading local model: {args.model_id}")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_id)
+        model = transformers.AutoModelForCausalLM.from_pretrained(
+            args.model_id, torch_dtype=torch.bfloat16, device_map="auto"
+        )
+        model.eval()
+        print(f"  Model loaded on {device}")
 
-    curr_eos = [151645, 151643]  # Qwen2.5 EOS tokens
-    target_sequences = [
-        "</search>", " </search>",
-        "</search>\n", " </search>\n",
-        "</search>\n\n", " </search>\n\n",
-    ]
-    stopping_criteria = transformers.StoppingCriteriaList(
-        [StopOnSequence(target_sequences, tokenizer)]
-    )
+        curr_eos = [151645, 151643]
+        target_sequences = [
+            "</search>", " </search>",
+            "</search>\n", " </search>\n",
+            "</search>\n\n", " </search>\n\n",
+        ]
+        stopping_criteria = transformers.StoppingCriteriaList(
+            [StopOnSequence(target_sequences, tokenizer)]
+        )
+        gemini_client = None
+        gemini_types = None
+        model_label = args.model_id
+    else:
+        print(f"Initialising Gemini client for {args.gemini_model} "
+              f"(base_url={args.gemini_base_url}, api_version={args.gemini_api_version})")
+        gemini_client, gemini_types = make_gemini_client(
+            api_key=args.gemini_api_key,
+            base_url=args.gemini_base_url,
+            api_version=args.gemini_api_version,
+        )
+        torch = None
+        tokenizer = None
+        model = None
+        device = None
+        stopping_criteria = None
+        curr_eos = None
+        model_label = args.gemini_model
 
-    # ── Evaluate ─────────────────────────────────────────────────────────
     f1_scores = []
     em_scores = []
     start_time = time.time()
@@ -303,24 +474,33 @@ def main():
         item = data[idx]
         question = item["question"]
         golden_answers = item["golden_answers"]
-
         raw_prompt = build_prompt(question)
-        if tokenizer.chat_template:
-            prompt = tokenizer.apply_chat_template(
-                [{"role": "user", "content": raw_prompt}],
-                add_generation_prompt=True, tokenize=False,
-            )
-        else:
-            prompt = raw_prompt
 
         try:
-            full_output, num_turns = run_inference(
-                prompt, model, tokenizer, device, stopping_criteria,
-                curr_eos,
-                max_turns=args.max_turns,
-                topk=args.topk,
-                retriever_url=args.retriever_url,
-            )
+            if args.backend == "local":
+                if tokenizer.chat_template:
+                    prompt = tokenizer.apply_chat_template(
+                        [{"role": "user", "content": raw_prompt}],
+                        add_generation_prompt=True, tokenize=False,
+                    )
+                else:
+                    prompt = raw_prompt
+                full_output, num_turns = run_inference_local(
+                    prompt, model, tokenizer, device, stopping_criteria,
+                    curr_eos,
+                    max_turns=args.max_turns,
+                    topk=args.topk,
+                    retriever_url=args.retriever_url,
+                )
+            else:
+                full_output, num_turns = run_inference_gemini(
+                    raw_prompt, gemini_client, gemini_types, args.gemini_model,
+                    max_turns=args.max_turns,
+                    topk=args.topk,
+                    retriever_url=args.retriever_url,
+                    max_new_tokens_main=1024,
+                    max_new_tokens_final=512,
+                )
 
             extracted_answer = extract_answer(full_output)
             if extracted_answer:
@@ -349,11 +529,14 @@ def main():
             "em": em,
             "num_turns": num_turns,
             "full_output": full_output,
+            "backend": args.backend,
+            "model": model_label,
         }
         with open(output_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(result, ensure_ascii=False) + "\n")
 
-        torch.cuda.empty_cache()
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         if (idx + 1) % 10 == 0:
             avg_f1 = sum(f1_scores) / len(f1_scores)
@@ -367,7 +550,6 @@ def main():
                 f"({per_q:.1f}s/q, ~{remaining/60:.0f}min left)"
             )
 
-    # ── Summary ──────────────────────────────────────────────────────────
     avg_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0
     avg_em = sum(em_scores) / len(em_scores) if em_scores else 0
 
@@ -376,7 +558,8 @@ def main():
         "num_samples": len(f1_scores),
         "avg_f1": round(avg_f1, 4),
         "avg_em": round(avg_em, 4),
-        "model": args.model_id,
+        "backend": args.backend,
+        "model": model_label,
         "max_turns": args.max_turns,
         "topk": args.topk,
     }
@@ -385,7 +568,7 @@ def main():
         json.dump(summary, f, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"RESULTS  ({len(f1_scores)} questions)")
+    print(f"RESULTS  ({len(f1_scores)} questions, backend={args.backend})")
     print(f"  F1:  {avg_f1:.4f}")
     print(f"  EM:  {avg_em:.4f}")
     print(f"  Results:  {output_file}")

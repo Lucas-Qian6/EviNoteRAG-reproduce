@@ -4,7 +4,8 @@ export PET_NODE_RANK=0
 export NCCL_BLOCKING_WAIT=1  
 export NCCL_IB_DISABLE=0  
 export NCCL_SOCKET_IFNAME=eth0  
-ray start --head
+# Use Ray via the active Python interpreter so a stale shebang does not break the run.
+python3 -m ray.scripts.scripts start --head
 
 
 export BASE_MODEL='Qwen/Qwen2.5-7B-Instruct'

@@ -1,5 +1,6 @@
 import re
 import numpy as np
+from typing import Optional
 
 # Step 1: Extract ground truth
 def extract_ground_truth_strings(ground_truths):
@@ -51,14 +52,14 @@ def extract_question_and_rewrite(text, ground_truths):
 
     return results
 
-def extract_last_summary(text: str) -> str | None:
+def extract_last_summary(text: str) -> Optional[str]:
     """
     Extracts the content of the last completely closed <summary>...</summary> tag.
     Args:
         text (str): Input text, which may contain multiple <summary> tags
         debug (bool): Whether to enable debug log
     Returns:
-        str | None: The content inside the last completely closed <summary> tag (with whitespace stripped),
+        Optional[str]: The content inside the last completely closed <summary> tag (with whitespace stripped),
                     or None if no match is found.
     """
 
@@ -90,14 +91,14 @@ def extract_last_summary(text: str) -> str | None:
     return last_content
 
 
-def extract_last_evidence(text: str) -> str | None:
+def extract_last_evidence(text: str) -> Optional[str]:
     """
     Extracts the content of the last completely closed <evidence>...</evidence> tag.
     Args:
         text (str): Input text, which may contain multiple <evidence> tags
         debug (bool): Whether to enable debug log
     Returns:
-        str | None: The content inside the last completely closed <evidence> tag (with whitespace stripped),
+        Optional[str]: The content inside the last completely closed <evidence> tag (with whitespace stripped),
                     or None if no match is found.
     """
 

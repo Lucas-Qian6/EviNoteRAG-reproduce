@@ -556,20 +556,20 @@ class RayPPOTrainer(object):
             data_source = data_sources[i]
             f1_data_source = f"{data_source}_f1"
             em_data_source = f"{data_source}_em"
-            llm_data_source = f"{data_source}_llm"
+            # llm_data_source = f"{data_source}_llm"
             retrival_data_source = f"{data_source}_retrival"
             if f1_data_source not in data_source_reward:
                 data_source_reward[f1_data_source] = []
             if em_data_source not in data_source_reward:
                 data_source_reward[em_data_source] = []
-            if llm_data_source not in data_source_reward:
-                data_source_reward[llm_data_source] = []
+            # if llm_data_source not in data_source_reward:
+            #     data_source_reward[llm_data_source] = []
             if retrival_data_source not in data_source_reward:
                 data_source_reward[retrival_data_source] = []
 
             data_source_reward[em_data_source].append(em_reward_tensor[i].item())
             data_source_reward[f1_data_source].append(f1_reward_tensor[i].item())
-            data_source_reward[llm_data_source].append(llm_reward_tensor[i].item())
+            # data_source_reward[llm_data_source].append(llm_reward_tensor[i].item())
             data_source_reward[retrival_data_source].append(retrival_reward_tensor[i].item())
 
         metric_dict = {}

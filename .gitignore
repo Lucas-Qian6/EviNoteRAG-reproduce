@@ -10,7 +10,6 @@ data_addPrompt/
 data/
 /data_preprocess/data
 train_grpo_16gpus_ours.sh
-debug/
 ossutil_output/
 data_preprocess/data/
 .DS_Store

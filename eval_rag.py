@@ -373,7 +373,7 @@ def load_trivia(num_samples, dataset_id, config, split):
             "golden_answers": answers,
         })
     return data, used
-    
+
 def load_parquet(num_samples, dataset_id, config, split):
     """Load questions directly from m_test.parquet so we evaluate on the
     same 500 questions per benchmark that EviNote / Search-R1 use.
@@ -498,6 +498,7 @@ def run_inference_local(
                 max_new_tokens=max_new_tokens_main,
                 stopping_criteria=stopping_criteria,
                 pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=curr_eos,
                 do_sample=False,
             )
 
@@ -526,6 +527,7 @@ def run_inference_local(
                     attention_mask=attention_mask,
                     max_new_tokens=max_new_tokens_final,
                     pad_token_id=tokenizer.eos_token_id,
+                    eos_token_id=curr_eos,
                     do_sample=False,
                 )
             generated_tokens = outputs[0][input_ids.shape[1]:]

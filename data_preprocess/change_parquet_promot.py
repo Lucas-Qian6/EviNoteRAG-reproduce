@@ -95,14 +95,26 @@ if __name__ == "__main__":
     You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
     You should continue searching until all the required information has been retrieved, and then provide the final answer.
 
-    ## Note-Taking Rules  
-    When retrieving information enclosed in `<information>`, summarize its content and use the following markers to highlight key or uncertain elements:
+    # ## Note-Taking Rules  
+    # When retrieving information enclosed in `<information>`, summarize its content and use the following markers to highlight key or uncertain elements:
 
-    There are two types of markers:
-    1. `-` (Uncertainty): Marks ambiguous or uncertain information.  
-    Example: `-He picked up Jenny-` (Uncertain who "he" refers to).
-    2. `*` (Key Info): Highlights important or critical details.  
-    Example: *Built in 1900* (The year is essential).
+    # There are two types of markers:
+    # 1. `-` (Uncertainty): Marks ambiguous or uncertain information.  
+    # Example: `-He picked up Jenny-` (Uncertain who "he" refers to).
+    # 2. `*` (Key Info): Highlights important or critical details.  
+    # Example: *Built in 1900* (The year is essential).
+
+    When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
+
+    Steps:
+    1. **Decompose**: extract each distinct factual statement as a separate claim, labeled with its source (e.g. `C1 [Doc1]`).
+    2. **Filter**: drop claims that are not relevant to the question.
+    3. **Relate**: for pairs of relevant claims, mark one of:
+       - **corroborates**: claims reinforce each other (same or near-identical fact).
+       - **contradicts**: claims conflict or give incompatible information.
+       - **complements**: claims address different aspects of the question without overlap.
+       - **subsumes**: one claim is strictly more specific than the other on the same point.
+    4. **Resolve**: merge corroborating claims into one; on contradiction prefer the more specific claim and note the conflict; keep complementary claims as separate points; on subsumption keep the more specific claim and drop the generic one.
 
     ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.

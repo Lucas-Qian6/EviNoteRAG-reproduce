@@ -373,7 +373,48 @@ def load_trivia(num_samples, dataset_id, config, split):
             "golden_answers": answers,
         })
     return data, used
+    
+def load_parquet(num_samples, dataset_id, config, split):
+    """Load questions directly from m_test.parquet so we evaluate on the
+    same 500 questions per benchmark that EviNote / Search-R1 use.
 
+    Args:
+        dataset_id: path to the parquet file (e.g. ./data_preprocess/data/m_test.parquet)
+        config: data_source prefix to filter on, e.g. 'triviaqa', 'nq', 'hotpotqa',
+                'popqa', '2wikimultihopqa', 'musique', 'bamboogle'.
+                If None, loads all rows.
+        split: ignored.
+    """
+    import pandas as pd
+
+    parquet_path = dataset_id or "./data_preprocess/data/m_test.parquet"
+    df = pd.read_parquet(parquet_path)
+
+    if config:
+        # match both "<name>" and "<name>_val"
+        mask = df["data_source"].astype(str).str.startswith(config)
+        df = df[mask].reset_index(drop=True)
+
+    if num_samples and num_samples < len(df):
+        df = df.iloc[:num_samples].reset_index(drop=True)
+
+    def extract_q(prompt_content: str) -> str:
+        if "Question:" not in prompt_content:
+            return prompt_content.strip()
+        return prompt_content.split("Question:")[-1].strip().splitlines()[0].strip()
+
+    data = []
+    for idx, row in df.iterrows():
+        q = extract_q(row["prompt"][0]["content"])
+        golds = list(row["reward_model"]["ground_truth"]["target"])
+        if not golds:
+            raise ValueError(f"No gold answers for parquet row {idx}")
+        data.append({
+            "index": int(idx),
+            "question": q,
+            "golden_answers": golds,
+        })
+    return data, parquet_path
 
 DATASETS = {
     "nq": {
@@ -394,6 +435,16 @@ DATASETS = {
         "default_config": "rc.nocontext",
         "config_help": "TriviaQA: rc, rc.nocontext, unfiltered, unfiltered.nocontext",
     },
+    "parquet": {
+        "loader": load_parquet,
+        "prefix": "parquet",
+        "default_config": None,
+        "config_help": (
+            "Use --config <data_source_prefix> to pick a subset, e.g. "
+            "triviaqa, nq, hotpotqa, popqa, 2wikimultihopqa, musique, bamboogle. "
+            "Use --dataset_id to point at a different parquet path."
+        ),
+    }, 
 }
 
 

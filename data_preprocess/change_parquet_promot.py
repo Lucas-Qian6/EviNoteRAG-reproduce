@@ -83,6 +83,15 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
     except Exception as e:
         print(f"❌ Processing failed: {e}")
 
+    # ## Note-Taking Rules  
+    # When retrieving information enclosed in `<information>`, summarize its content and use the following markers to highlight key or uncertain elements:
+
+    # There are two types of markers:
+    # 1. `-` (Uncertainty): Marks ambiguous or uncertain information.  
+    # Example: `-He picked up Jenny-` (Uncertain who "he" refers to).
+    # 2. `*` (Key Info): Highlights important or critical details.  
+    # Example: *Built in 1900* (The year is essential).
+
 if __name__ == "__main__":
     def my_custom_prefix(question):
         """prefix function"""
@@ -94,15 +103,6 @@ if __name__ == "__main__":
     # Role Definition  
     You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
     You should continue searching until all the required information has been retrieved, and then provide the final answer.
-
-    # ## Note-Taking Rules  
-    # When retrieving information enclosed in `<information>`, summarize its content and use the following markers to highlight key or uncertain elements:
-
-    # There are two types of markers:
-    # 1. `-` (Uncertainty): Marks ambiguous or uncertain information.  
-    # Example: `-He picked up Jenny-` (Uncertain who "he" refers to).
-    # 2. `*` (Key Info): Highlights important or critical details.  
-    # Example: *Built in 1900* (The year is essential).
 
     When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
 

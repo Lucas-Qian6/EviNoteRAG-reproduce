@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.
-    - For each `<information>Search result</information>`, provide a summarized version in `<summary>`, using the above markers to indicate key or uncertain information.
+    - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
     - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
     - If it's a yes/no question, respond only with `yes` or `no`.
     - Always follow this format strictly.

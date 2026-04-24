@@ -167,7 +167,7 @@ def build_prompt_claim(question):
     question = question.strip()
     if not question.endswith("?"):
         question += "?"
-        return f"""
+    return f"""
     ## Background Information  
     # Role Definition  
     You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.

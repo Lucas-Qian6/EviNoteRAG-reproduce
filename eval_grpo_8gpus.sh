@@ -12,7 +12,7 @@ python3 -m ray.scripts.scripts start --head
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 # WAND_PROJECT='eval_EviNoteRAG' 
 WAND_PROJECT='eval_Qwen2.5-7B-Instruct'
-EXPERIMENT_NAME='eval'
+EXPERIMENT_NAME='eval_claimlevel'
 
 
 # set -x

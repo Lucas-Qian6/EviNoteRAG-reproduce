@@ -8,11 +8,11 @@ export NCCL_SOCKET_IFNAME=eth0
 python3 -m ray.scripts.scripts start --head
 
 
-export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG-7B'
-# export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
-WAND_PROJECT='eval_EviNoteRAG' 
-# WAND_PROJECT='eval_Qwen2.5-7B-Instruct'
-EXPERIMENT_NAME='eval_claimlevel_2'
+# export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG-7B'
+export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
+# WAND_PROJECT='eval_EviNoteRAG' 
+WAND_PROJECT='eval_Qwen2.5-7B-Instruct'
+EXPERIMENT_NAME='eval'
 
 
 # set -x
@@ -22,8 +22,8 @@ mkdir -p ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_p.parquet \
-    data.val_files=./data_preprocess/data/m_test_p.parquet \
+    data.train_files=./data_preprocess/data/m_train.parquet \
+    data.val_files=./data_preprocess/data/m_test.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=300 \

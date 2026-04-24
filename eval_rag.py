@@ -167,13 +167,12 @@ def build_prompt_claim(question):
     question = question.strip()
     if not question.endswith("?"):
         question += "?"
-    return f"""
+        return f"""
     ## Background Information  
     # Role Definition  
     You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
     You should continue searching until all the required information has been retrieved, and then provide the final answer.
 
-    ## Claim-Level Evidence Organization Rules  
     When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
 
     Steps:
@@ -188,11 +187,11 @@ def build_prompt_claim(question):
 
     ## Format Instructions  
     - Use `<search>Your query</search>` to call the search tool.
-    - For each `<information>Search result</information>`, provide a structured version in `<summary>`, following the steps above.
-    - Only output the final answer inside `<answer></answer>`. The answer should be the specific name, date, number, place, or fact that directly answers the question. Do not include explanations, reasoning, or extra text.
+    - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
+    - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
+    - If it's a yes/no question, respond only with `yes` or `no`.
     - Always follow this format strictly.
     - **Answer must be in English. Only English responses will be accepted.**
-    - You MUST search for evidence before answering. Do NOT answer based on your own knowledge.
     Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
     Question: {question}
     """

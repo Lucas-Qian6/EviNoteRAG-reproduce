@@ -9,8 +9,8 @@ python3 -m ray.scripts.scripts start --head
 
 
 # export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG-7B'
-# export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
-export BASE_MODEL='/mnt/finder/qyj/models/SearchR1-nq_hotpotqa_train-qwen2.5-7b-it-em-ppo'
+export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
+# export BASE_MODEL='/mnt/finder/qyj/models/SearchR1-nq_hotpotqa_train-qwen2.5-7b-it-em-ppo'
 # WAND_PROJECT='eval_EviNoteRAG' 
 # WAND_PROJECT='eval_Qwen2.5-7B-Instruct'
 WAND_PROJECT='eval_qwen2.5'

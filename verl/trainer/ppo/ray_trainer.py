@@ -548,62 +548,6 @@ class RayPPOTrainer(object):
         f1_reward_tensor = torch.cat([rw.sum(-1) for rw in f1_reward_tensor_lst], dim=0).cpu()  # (batch_size,)
         retrival_reward_tensor = torch.cat([rw.sum(-1) for rw in retrival_reward_tensor_lst], dim=0).cpu()  # (batch_size,)
 
-
-        # ===== DEBUG: save per-sample validation cases =====
-        import torch
-
-        debug_dir = f"./outputs/{self.config.trainer.project_name}/{self.config.trainer.experiment_name}/debug_samples"
-        os.makedirs(debug_dir, exist_ok=True)
-        debug_path = os.path.join(debug_dir, "val_samples.jsonl")
-
-        responses = self.tokenizer.batch_decode(
-            test_batch.batch["responses"],
-            skip_special_tokens=True
-        )
-
-        prompts = self.tokenizer.batch_decode(
-            test_batch.batch["prompts"],
-            skip_special_tokens=True
-        )
-
-        data_sources = test_batch.non_tensor_batch.get(
-            "data_source",
-            ["unknown"] * len(responses)
-        )
-
-        reward_models = test_batch.non_tensor_batch.get(
-            "reward_model",
-            [None] * len(responses)
-        )
-
-        extra_infos = test_batch.non_tensor_batch.get(
-            "extra_info",
-            [None] * len(responses)
-        )
-
-        em_scores = em_reward_tensor.sum(-1).detach().cpu().tolist()
-        f1_scores = f1_reward_tensor.sum(-1).detach().cpu().tolist()
-        retrieval_scores = retrival_reward_tensor.sum(-1).detach().cpu().tolist()
-
-        with open(debug_path, "a", encoding="utf-8") as f:
-            for i in range(len(responses)):
-                gt = None
-                if isinstance(reward_models[i], dict):
-                    gt = reward_models[i].get("ground_truth", None)
-
-                record = {
-                    "data_source": str(data_sources[i]),
-                    "index": extra_infos[i].get("index") if isinstance(extra_infos[i], dict) else None,
-                    "prompt": prompts[i],
-                    "response": responses[i],
-                    "ground_truth": gt,
-                    "em": em_scores[i],
-                    "f1": f1_scores[i],
-                    "retrieval_reward": retrieval_scores[i],
-                }
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-        # ===== END DEBUG =====
-
         data_sources = np.concatenate(data_source_lst, axis=0)
 
          # evaluate test_score based on data source

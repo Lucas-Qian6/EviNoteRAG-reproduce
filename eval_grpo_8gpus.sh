@@ -14,7 +14,7 @@ export BASE_MODEL='/mnt/finder/qyj/models/SearchR1-nq_hotpotqa_train-qwen2.5-7b-
 # WAND_PROJECT='eval_EviNoteRAG' 
 # WAND_PROJECT='eval_Qwen2.5-7B-Instruct'
 WAND_PROJECT='eval_searchR1'
-EXPERIMENT_NAME='eval'
+EXPERIMENT_NAME='eval_claim'
 
 
 # set -x
@@ -24,8 +24,8 @@ mkdir -p ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_searchr1.parquet \
-    data.val_files=./data_preprocess/data/m_test_searchr1.parquet \
+    data.train_files=./data_preprocess/data/m_train_searchr1_claim.parquet \
+    data.val_files=./data_preprocess/data/m_test_searchr1_claim.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=300 \

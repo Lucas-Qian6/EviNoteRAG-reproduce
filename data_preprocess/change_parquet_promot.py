@@ -137,6 +137,26 @@ if __name__ == "__main__":
         <search> query </search>
         and it will return the top searched results between <information> and </information>.
 
+        When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block following the steps below:
+        The <summary> block should:
+        - Decompose useful retrieved evidence into atomic claims, labeled by source, such as C1 [Doc1].
+        - Filter out claims that are irrelevant to the question.
+        - Relate important claims using: corroborates, contradicts, complements, or subsumes.
+        - Resolve:
+        For each relation:
+            - corroborates: merge the claims into one concise claim.
+            - complements: keep both claims if both help answer the question.
+            - subsumes: keep the more specific claim and drop the generic one.
+            - contradicts:
+            a. Check whether the claims differ only because of time, location, entity, definition, or scope.
+                If so, keep both with their scope clearly stated.
+            b. If they truly conflict, choose one only if the evidence clearly supports it more.
+                Evidence is stronger when it is directly relevant to the question, supported by multiple documents,
+                more specific to the asked entity/time/scope, or from a more relevant document.
+            c. If there is no clear reason to choose, mark the conflict as UNRESOLVED.
+                Do not invent a resolution.
+                Search for more evidence to resolve the conflict.
+
         You can search as many times as you want.
 
         If you find no further external knowledge needed, you can directly provide the answer inside

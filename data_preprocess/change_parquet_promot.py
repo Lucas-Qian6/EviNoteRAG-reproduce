@@ -53,7 +53,8 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
             # Construct output path
             relative_path = os.path.relpath(file_path, input_dir)
             base_name, _ = os.path.splitext(relative_path)
-            output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
+            # output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
+            output_file = os.path.join(output_dir, f"{base_name}_searchr1.parquet")
             
             # Create output directories
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -92,6 +93,35 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
     # 2. `*` (Key Info): Highlights important or critical details.  
     # Example: *Built in 1900* (The year is essential).
 
+    #         return f"""
+    # ## Background Information  
+    # # Role Definition  
+    # You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
+    # You should continue searching until all the required information has been retrieved, and then provide the final answer.
+
+    # When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
+
+    # Steps:
+    # 1. **Decompose**: extract each distinct factual statement as a separate claim, labeled with its source (e.g. `C1 [Doc1]`).
+    # 2. **Filter**: drop claims that are not relevant to the question.
+    # 3. **Relate**: for pairs of relevant claims, mark one of:
+    #    - **corroborates**: claims reinforce each other (same or near-identical fact).
+    #    - **contradicts**: claims conflict or give incompatible information.
+    #    - **complements**: claims address different aspects of the question without overlap.
+    #    - **subsumes**: one claim is strictly more specific than the other on the same point.
+    # 4. **Resolve**: merge corroborating claims into one; on contradiction prefer the more specific claim and note the conflict; keep complementary claims as separate points; on subsumption keep the more specific claim and drop the generic one.
+
+    # ## Format Instructions  
+    # - Use `<search>Your query</search>` to call the search tool.
+    # - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
+    # - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
+    # - If it's a yes/no question, respond only with `yes` or `no`.
+    # - Always follow this format strictly.
+    # - **Answer must be in English. Only English responses will be accepted.**
+    # Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
+    # Question: {question}
+    # """
+
 if __name__ == "__main__":
     def my_custom_prefix(question):
         """prefix function"""
@@ -99,33 +129,24 @@ if __name__ == "__main__":
         if question[-1] != '?':
             question += '?'
         return f"""
-    ## Background Information  
-    # Role Definition  
-    You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
-    You should continue searching until all the required information has been retrieved, and then provide the final answer.
+        Answer the given question.
 
-    When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block.
+        You must conduct reasoning inside <think> and </think> first every time you get new information.
 
-    Steps:
-    1. **Decompose**: extract each distinct factual statement as a separate claim, labeled with its source (e.g. `C1 [Doc1]`).
-    2. **Filter**: drop claims that are not relevant to the question.
-    3. **Relate**: for pairs of relevant claims, mark one of:
-       - **corroborates**: claims reinforce each other (same or near-identical fact).
-       - **contradicts**: claims conflict or give incompatible information.
-       - **complements**: claims address different aspects of the question without overlap.
-       - **subsumes**: one claim is strictly more specific than the other on the same point.
-    4. **Resolve**: merge corroborating claims into one; on contradiction prefer the more specific claim and note the conflict; keep complementary claims as separate points; on subsumption keep the more specific claim and drop the generic one.
+        After reasoning, if you find you lack some knowledge, you can call a search engine by
+        <search> query </search>
+        and it will return the top searched results between <information> and </information>.
 
-    ## Format Instructions  
-    - Use `<search>Your query</search>` to call the search tool.
-    - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
-    - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
-    - If it's a yes/no question, respond only with `yes` or `no`.
-    - Always follow this format strictly.
-    - **Answer must be in English. Only English responses will be accepted.**
-    Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
-    Question: {question}
-    """
+        You can search as many times as you want.
+
+        If you find no further external knowledge needed, you can directly provide the answer inside
+        <answer> and </answer>, without detailed illustrations.
+
+        For example:
+        <answer> Beijing </answer>
+
+        Question: {question}
+        """
 
     input_directory = "./data/"
     output_directory = "./data/"

@@ -624,7 +624,20 @@ class LLMGenerationManager:
             print("Search Error")
             print(repr(queries))
             return [''] * len(queries)
-        
+
+        # DEBUG
+        os.makedirs("./outputs/eval/debug_search", exist_ok=True)
+        with open("./outputs/eval/debug_search/search_queries.jsonl", "a", encoding="utf-8") as f:
+            for q, r in zip(queries, results):
+                f.write(json.dumps({
+                    "query": q,
+                    "num_results": len(r),
+                    "top_docs": [
+                        item.get("document", {}).get("contents", "")[:1000]
+                        for item in r[:3]
+                    ]
+                }, ensure_ascii=False) + "\n")
+            
         return [self._passages2string(result) for result in results]
 
     def _batch_search(self, queries):

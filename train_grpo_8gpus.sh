@@ -57,7 +57,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.logger=['console'] \
     +trainer.val_before_train=false \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=7 \
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     +trainer.use_amp=True \
     +trainer.amp_dtype="bfloat16" \
@@ -69,7 +69,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=/root/verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=4 \
-    actor_rollout_ref.rollout.n_agent=5 \
+    actor_rollout_ref.rollout.n_agent=4 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
     # 2>&1 | tee ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}/${DATE}.log 

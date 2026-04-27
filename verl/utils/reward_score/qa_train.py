@@ -321,12 +321,12 @@ def batched_compute_score_f1_ver(
             f1_value = f1_check(answer, ground_truth)
             if f1_value > 0:
                 rd_score = score * f1_value
-            elif check_if_mark_exist(solution_str):
-                rd_score = 0.1
+            # elif check_if_mark_exist(solution_str):
+            #     rd_score = 0.1
             else:
                 rd_score = format_score
 
-        rd_score += batch_retrival_scores[i]
+        # rd_score += batch_retrival_scores[i]
         
         # save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source,f1_score=f1_value, Search_score=batch_retrival_scores[i])
         if random.randint(1, 64) == 1:
@@ -393,11 +393,11 @@ def batched_compute_score_em_ver(
         else:
             if em_check(answer, ground_truth):
                 rd_score = score # 1.0
-            elif check_if_mark_exist(solution_str):
-                rd_score = 0.1
+            # elif check_if_mark_exist(solution_str):
+            #     rd_score = 0.1
             else:
                 rd_score = format_score # 0.0
-        rd_score += batch_retrival_scores[i]
+        # rd_score += batch_retrival_scores[i]
         
         # save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source, Search_score=batch_retrival_scores[i])
         if random.randint(1, 64) == 1:

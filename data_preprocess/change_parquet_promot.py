@@ -54,7 +54,7 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
             relative_path = os.path.relpath(file_path, input_dir)
             base_name, _ = os.path.splitext(relative_path)
             # output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
-            output_file = os.path.join(output_dir, f"{base_name}_searchr1_claim.parquet")
+            output_file = os.path.join(output_dir, f"{base_name}_dotraining.parquet")
             
             # Create output directories
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -122,6 +122,27 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
     # Question: {question}
     # """
 
+    #         When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block following the steps below:
+    #     The <summary> block should:
+    #     - Decompose useful retrieved evidence into atomic claims, labeled by source, such as C1 [Doc1].
+    #     - Filter out claims that are irrelevant to the question.
+    #     - Relate important claims using: corroborates, contradicts, complements, or subsumes.
+    #     - Resolve:
+    #     For each relation:
+    #         - corroborates: merge the claims into one concise claim.
+    #         - complements: keep both claims if both help answer the question.
+    #         - subsumes: keep the more specific claim and drop the generic one.
+    #         - contradicts:
+    #         a. Check whether the claims differ only because of time, location, entity, definition, or scope.
+    #             If so, keep both with their scope clearly stated.
+    #         b. If they truly conflict, choose one only if the evidence clearly supports it more.
+    #             Evidence is stronger when it is directly relevant to the question, supported by multiple documents,
+    #             more specific to the asked entity/time/scope, or from a more relevant document.
+    #         c. If there is no clear reason to choose, mark the conflict as UNRESOLVED.
+    #             Do not invent a resolution.
+    #             Search for more evidence to resolve the conflict.
+
+
 if __name__ == "__main__":
     def my_custom_prefix(question):
         """prefix function"""
@@ -129,42 +150,25 @@ if __name__ == "__main__":
         if question[-1] != '?':
             question += '?'
         return f"""
-        Answer the given question.
+        ## Background Information  
+        # Role Definition  
+        You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
+        You should continue searching until all the required information has been retrieved, and then provide the final answer.
 
-        You must conduct reasoning inside <think> and </think> first every time you get new information.
+        ## Note-Taking Rules
+        When retrieving information enclosed in `<information>`, write claim-level notes in a <summary> block:
+        - Decompose retrieved evidence into atomic factual claims, labeled by source (e.g., Claim: fact [Doc1]).
+        - When claims from different sources agree, merge them into one claim citing both sources.
+        - When claims conflict, note the conflict and assess which is more specific. If unresolved, search for more evidence.
 
-        After reasoning, if you find you lack some knowledge, you can call a search engine by
-        <search> query </search>
-        and it will return the top searched results between <information> and </information>.
-
-        When retrieving information enclosed in `<information>`, organize its content into atomic claims and the relationships between them, then write the result in a `<summary>` block following the steps below:
-        The <summary> block should:
-        - Decompose useful retrieved evidence into atomic claims, labeled by source, such as C1 [Doc1].
-        - Filter out claims that are irrelevant to the question.
-        - Relate important claims using: corroborates, contradicts, complements, or subsumes.
-        - Resolve:
-        For each relation:
-            - corroborates: merge the claims into one concise claim.
-            - complements: keep both claims if both help answer the question.
-            - subsumes: keep the more specific claim and drop the generic one.
-            - contradicts:
-            a. Check whether the claims differ only because of time, location, entity, definition, or scope.
-                If so, keep both with their scope clearly stated.
-            b. If they truly conflict, choose one only if the evidence clearly supports it more.
-                Evidence is stronger when it is directly relevant to the question, supported by multiple documents,
-                more specific to the asked entity/time/scope, or from a more relevant document.
-            c. If there is no clear reason to choose, mark the conflict as UNRESOLVED.
-                Do not invent a resolution.
-                Search for more evidence to resolve the conflict.
-
-        You can search as many times as you want.
-
-        If you find no further external knowledge needed, you can directly provide the answer inside
-        <answer> and </answer>, without detailed illustrations.
-
-        For example:
-        <answer> Beijing </answer>
-
+        ## Format Instructions  
+        - Use `<search>Your query</search>` to call the search tool.
+        - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
+        - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
+        - If it's a yes/no question, respond only with `yes` or `no`.
+        - Always follow this format strictly.
+        - **Answer must be in English. Only English responses will be accepted.**
+        Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
         Question: {question}
         """
 

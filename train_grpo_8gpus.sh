@@ -8,7 +8,7 @@ export NCCL_SOCKET_IFNAME=eth0
 python3 -m ray.scripts.scripts start --head
 
 
-export BASE_MODEL='Qwen/Qwen2.5-7B-Instruct'
+export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG/local/actor/Best''
 WAND_PROJECT='EviNoteRAG'
 EXPERIMENT_NAME='local'
 
@@ -62,7 +62,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.use_amp=True \
     +trainer.amp_dtype="bfloat16" \
     trainer.save_freq=30 \
-    trainer.test_freq=100 \
+    trainer.test_freq=30 \
     trainer.project_name=$WAND_PROJECT \
     trainer.experiment_name=$EXPERIMENT_NAME \
     trainer.total_epochs=1 \
@@ -72,4 +72,4 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    # 2>&1 | tee ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}/${DATE}.log 
+    2>&1 | tee ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}/${DATE}.log 

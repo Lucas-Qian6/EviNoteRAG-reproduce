@@ -328,7 +328,7 @@ def batched_compute_score_f1_ver(
 
         # rd_score += batch_retrival_scores[i]
         
-        # save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source,f1_score=f1_value, Search_score=batch_retrival_scores[i])
+        save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source,f1_score=f1_value, Search_score=batch_retrival_scores[i])
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
             print(f"Solution string: {solution_str}")
@@ -399,7 +399,7 @@ def batched_compute_score_em_ver(
                 rd_score = format_score # 0.0
         # rd_score += batch_retrival_scores[i]
         
-        # save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source, Search_score=batch_retrival_scores[i])
+        save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source, Search_score=batch_retrival_scores[i])
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
             print(f"Solution string: {solution_str}")

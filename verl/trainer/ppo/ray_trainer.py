@@ -1023,7 +1023,7 @@ class RayPPOTrainer(object):
                 except Exception as e:
                     print(f"Warning: Failed to write initial validation metrics to {filename_metrics}: {e}")  
                 # save besst
-                if metrics["val/test_score/nq_val_em"] > self.best_score:
+                if "val/test_score/nq_val_em" in metrics and metrics["val/test_score/nq_val_em"] > self.best_score:
                     self._save_checkpoint(is_best = True)
                     self.best_score = metrics["val/test_score/nq_val_em"]
                     print(f"********* best updated at step {self.global_steps} *********")

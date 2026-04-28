@@ -8,7 +8,7 @@ export NCCL_SOCKET_IFNAME=eth0
 python3 -m ray.scripts.scripts start --head
 
 
-export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG/local/actor/Best''
+export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG/local/actor/Best'
 WAND_PROJECT='EviNoteRAG'
 EXPERIMENT_NAME='local'
 

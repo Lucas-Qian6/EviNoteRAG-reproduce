@@ -15,7 +15,7 @@ EXPERIMENT_NAME='0429_120'
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
 # Old checkpoints named global_step_N are supported even if training_state.json is missing.
-RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_120'
+RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/0429/actor/global_step_120'
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues

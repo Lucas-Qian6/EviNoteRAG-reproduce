@@ -10,12 +10,12 @@ python3 -m ray.scripts.scripts start --head
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='0428'
+EXPERIMENT_NAME='0429_120'
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
 # Old checkpoints named global_step_N are supported even if training_state.json is missing.
-RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_90'
+RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_120'
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues

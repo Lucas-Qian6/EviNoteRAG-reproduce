@@ -8,9 +8,14 @@ export NCCL_SOCKET_IFNAME=eth0
 python3 -m ray.scripts.scripts start --head
 
 
-export BASE_MODEL='/mnt/finder/qyj/models/EviNoteRAG/local/actor/Best'
+export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='local'
+EXPERIMENT_NAME='0428'
+
+# To resume from a checkpoint, uncomment and set RESUME_FROM to the checkpoint path.
+# BASE_MODEL must remain the original model (used as ref policy for KL penalty).
+# RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_30'
+RESUME_FROM=''
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -56,6 +61,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.val_only=false \
     trainer.logger=['console','wandb'] \
     +trainer.val_before_train=false \
+    +trainer.resume_from="$RESUME_FROM" \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=7 \
     trainer.nnodes=1 \

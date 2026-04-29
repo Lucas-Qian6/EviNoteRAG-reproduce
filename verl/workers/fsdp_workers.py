@@ -300,8 +300,12 @@ class ActorRolloutRefWorker(Worker):
             else:
                 optim_config = None
                 fsdp_config = OmegaConf.create()
+            # Use resume checkpoint for actor if available, otherwise use base model
+            actor_model_path = self.config.model.get('resume_from', None) or self.config.model.path
+            if actor_model_path != self.config.model.path and self.rank == 0:
+                print(f'[Resume] Loading actor from checkpoint: {actor_model_path}')
             self.actor_module_fsdp, self.actor_optimizer, self.actor_lr_scheduler, self.actor_model_config = self._build_model_optimizer(
-                model_path=self.config.model.path,
+                model_path=actor_model_path,
                 fsdp_config=fsdp_config,
                 optim_config=optim_config,
                 override_model_config=override_model_config,

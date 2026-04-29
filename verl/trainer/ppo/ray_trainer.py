@@ -352,6 +352,16 @@ class RayPPOTrainer(object):
 
         self.best_score = 0 # save best
 
+        # If resuming, inject checkpoint path into model config so the actor
+        # loads from the checkpoint while the ref model loads from the original base.
+        resume_from = self.config.trainer.get('resume_from', None)
+        if resume_from:
+            OmegaConf.set_struct(self.config, True)
+            with open_dict(self.config):
+                self.config.actor_rollout_ref.model.resume_from = resume_from
+            print(f'[Resume] Actor will load weights from: {resume_from}')
+            print(f'[Resume] Ref model will load from original base: {self.config.actor_rollout_ref.model.path}')
+
         # define KL control
         if self.use_reference_policy:
             if config.algorithm.kl_ctrl.type == 'fixed':
@@ -775,6 +785,19 @@ class RayPPOTrainer(object):
             self.config.trainer.default_hdfs_dir, 'actor')
         self.actor_rollout_wg.save_checkpoint(actor_local_path, actor_remote_path)
 
+        # Save training state for resume
+        training_state = {
+            'global_steps': self.global_steps,
+            'best_score': self.best_score,
+        }
+        state_path = os.path.join(actor_local_path, 'training_state.json')
+        try:
+            with open(state_path, 'w') as f:
+                json.dump(training_state, f)
+            print(f'[Checkpoint] Saved training state to {state_path}')
+        except Exception as e:
+            print(f'[Checkpoint] Warning: failed to save training state: {e}')
+
         if self.use_critic:
             critic_local_path = os.path.join(self.config.trainer.default_local_dir, 'critic',
                                              f'global_step_{self.global_steps}')
@@ -811,6 +834,19 @@ class RayPPOTrainer(object):
 
         logger = self.logger
         self.global_steps = 0 # init step
+
+        # Resume from checkpoint if configured
+        resume_from = self.config.trainer.get('resume_from', None)
+        if resume_from:
+            state_path = os.path.join(resume_from, 'training_state.json')
+            if os.path.exists(state_path):
+                with open(state_path, 'r') as f:
+                    training_state = json.load(f)
+                self.global_steps = training_state['global_steps']
+                self.best_score = training_state.get('best_score', 0)
+                print(f'[Resume] Restored global_steps={self.global_steps}, best_score={self.best_score}')
+            else:
+                print(f'[Resume] Warning: no training_state.json found at {state_path}, starting from step 0')
 
         # perform validation before training
         # currently, we only support validation using the reward_function.

@@ -12,10 +12,10 @@ export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
 EXPERIMENT_NAME='0428'
 
-# To resume from a checkpoint, uncomment and set RESUME_FROM to the checkpoint path.
-# BASE_MODEL must remain the original model (used as ref policy for KL penalty).
-# RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_30'
-RESUME_FROM=''
+# Resume actor weights from a previous checkpoint.
+# BASE_MODEL must remain the original model because it is used as the ref policy.
+# Old checkpoints named global_step_N are supported even if training_state.json is missing.
+RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/local/actor/global_step_90'
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues

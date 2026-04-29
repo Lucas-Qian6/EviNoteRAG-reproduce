@@ -846,7 +846,15 @@ class RayPPOTrainer(object):
                 self.best_score = training_state.get('best_score', 0)
                 print(f'[Resume] Restored global_steps={self.global_steps}, best_score={self.best_score}')
             else:
-                print(f'[Resume] Warning: no training_state.json found at {state_path}, starting from step 0')
+                match = re.search(r'global_step_(\d+)$', os.path.basename(os.path.normpath(resume_from)))
+                if match is None:
+                    raise ValueError(
+                        f'[Resume] No training_state.json found at {state_path}, and cannot infer '
+                        f'global step from checkpoint path: {resume_from}'
+                    )
+                self.global_steps = int(match.group(1))
+                self.best_score = 0
+                print(f'[Resume] No training_state.json found; inferred global_steps={self.global_steps} from checkpoint path')
 
         # perform validation before training
         # currently, we only support validation using the reward_function.

@@ -150,27 +150,33 @@ if __name__ == "__main__":
         if question[-1] != '?':
             question += '?'
         return f"""
-        ## Background Information  
-        # Role Definition  
-        You are a specialized **Information Retrieval Agent**. Perform reasoning and use the search tool before providing the final answer.
-        You should continue searching until all the required information has been retrieved, and then provide the final answer.
+    ## Background Information
+    # Role Definition
+    You are a specialized Information Retrieval Agent. Use the search tool before providing the final answer.
+    Continue searching until all required information has been retrieved, including any bridge facts needed to connect the question to the final answer.
 
-        ## Note-Taking Rules
-        When retrieving information enclosed in `<information>`, write claim-level notes in a <summary> block:
-        - Decompose retrieved evidence into atomic factual claims, labeled by source (e.g., Claim: fact [Doc1]).
-        - When claims from different sources agree, merge them into one claim citing both sources.
-        - When claims conflict, note the conflict and assess which is more specific. If unresolved, search for more evidence.
+    ## Claim-Level Note-Taking Rules
+    When retrieving information enclosed in `<information>`, summarize it into short claim-level notes inside `<summary>`.
 
-        ## Format Instructions  
-        - Use `<search>Your query</search>` to call the search tool.
-        - For each `<information>Search result</information>`, provide a structured claim-level summary inside `<summary>`, following the steps above.
-        - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
-        - If it's a yes/no question, respond only with `yes` or `no`.
-        - Always follow this format strictly.
-        - **Answer must be in English. Only English responses will be accepted.**
-        Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
-        Question: {question}
-        """
+    Use these markers:
+    1. `*Bridge*`: intermediate facts needed to connect the question to the answer.
+    2. `*Answer*`: facts that directly support the final answer.
+    3. `-Noise/Uncertain-`: irrelevant, ambiguous, conflicting, or weak evidence.
+
+    Keep bridge claims even if they do not directly answer the question. If the notes only contain bridge or uncertain claims, search again.
+
+    ## Format Instructions
+    - Use `<search>Your query</search>` to call the search tool.
+    - For each `<information>Search result</information>`, provide a structured summary inside `<summary>`.
+    - When ready to answer, output the final answer only inside `<answer></answer>`.
+    - If it is a yes/no question, respond only with `yes` or `no`.
+    - Always follow this format strictly.
+    - Answer must be in English.
+
+    Note: No searches allowed after answer submission. Avoid answering when uncertain.
+
+    Question: {question}
+    """
 
     input_directory = "./data/"
     output_directory = "./data/"

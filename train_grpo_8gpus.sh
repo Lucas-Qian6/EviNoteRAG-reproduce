@@ -24,8 +24,8 @@ mkdir -p ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_dotraining.parquet \
-    data.val_files=./data_preprocess/data/m_test_dotraining.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining2.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining2.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=280 \

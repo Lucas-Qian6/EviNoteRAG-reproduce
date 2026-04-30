@@ -10,7 +10,7 @@ python3 -m ray.scripts.scripts start --head
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='0430_step30'
+EXPERIMENT_NAME='0430_step30_2'
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
@@ -50,7 +50,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=60 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.ref.log_prob_micro_batch_size=120 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \

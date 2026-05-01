@@ -25,6 +25,10 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
+ROLE_FORMAT_REWARD_WEIGHT = float(os.environ.get("ROLE_FORMAT_REWARD_WEIGHT", "0.05"))
+ANSWER_CLAIM_REWARD_WEIGHT = float(os.environ.get("ANSWER_CLAIM_REWARD_WEIGHT", "0.3"))
+BRIDGE_REWARD_WEIGHT = float(os.environ.get("BRIDGE_REWARD_WEIGHT", "0.0"))
+
 def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None):
     """Save the results to a file with a counter."""
     # Add a counter to the generation part; here just read the counter
@@ -97,6 +101,68 @@ def check_if_mark_exist(text, keyword_list=["*", "#"]):
                         stack.append(char)
     
     return len(stack) == 0 and (not is_empty)
+
+
+def extract_role_claims(summary, role):
+    """Extract one-line role-aware claims such as '*Answer* ...' from a summary."""
+    if not isinstance(summary, str) or not summary.strip():
+        return ""
+
+    role_pattern = re.escape(role)
+    matches = re.findall(
+        rf'{role_pattern}\s*:?\s*(.*?)(?=\n\s*(?:[-*]\s*)?\*(?:Bridge|Answer)\*|\n\s*-Noise/Uncertain-|\Z)',
+        summary,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    cleaned_claims = []
+    for match in matches:
+        claim = re.sub(r'\s+', ' ', match).strip(" -\n\t")
+        if claim:
+            cleaned_claims.append(claim)
+
+    return " ".join(cleaned_claims)
+
+
+def has_role_claim(summary, role):
+    return bool(extract_role_claims(summary, role))
+
+
+def has_valid_role_format(summary):
+    if not isinstance(summary, str):
+        return False
+    return has_role_claim(summary, "*Answer*") or has_role_claim(summary, "*Bridge*")
+
+
+def compute_process_rewards(solution_strs, summaries, processed_gts, retrival_eval_model):
+    """Compute role-aware process rewards for claim-level notes."""
+    n = len(solution_strs)
+    format_scores = [0.0] * n
+    answer_claim_scores = [0.0] * n
+    bridge_scores = [0.0] * n
+    answer_claim_texts = []
+
+    for i, summary in enumerate(summaries):
+        if has_valid_role_format(summary):
+            format_scores[i] = ROLE_FORMAT_REWARD_WEIGHT
+        if has_role_claim(summary, "*Bridge*"):
+            bridge_scores[i] = BRIDGE_REWARD_WEIGHT
+        answer_claim_texts.append(extract_role_claims(summary, "*Answer*"))
+
+    valid_answer_claim_indices = [
+        i for i, claim_text in enumerate(answer_claim_texts)
+        if claim_text.strip() and str(processed_gts[i]).strip()
+    ]
+    if retrival_eval_model is not None and ANSWER_CLAIM_REWARD_WEIGHT > 0 and valid_answer_claim_indices:
+        raw_answer_claim_scores = ray.get(
+            retrival_eval_model.batch_retrival_score_fast.remote(
+                ground_truths=[processed_gts[i] for i in valid_answer_claim_indices],
+                retrival_infos=[answer_claim_texts[i] for i in valid_answer_claim_indices],
+            )
+        )
+        for idx, raw_score in zip(valid_answer_claim_indices, raw_answer_claim_scores):
+            answer_claim_scores[idx] = ANSWER_CLAIM_REWARD_WEIGHT * raw_score
+
+    return format_scores, answer_claim_scores, bridge_scores
 
 
 
@@ -301,12 +367,12 @@ def batched_compute_score_f1_ver(
     # Data length check
     assert len(solution_strs) == len(ground_truths) == len(summaries), "All lists must be the same length"
 
-    # Batch inference for retrieval scores
-    # batch_retrival_scores = [0.0] * len(solution_strs)
-    if retrival_eval_model is not None:
-        batch_retrival_scores = ray.get(
-            retrival_eval_model.batch_retrival_score_fast.remote(ground_truths = processed_gts, retrival_infos = summaries)
-        )
+    format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
+        solution_strs=solution_strs,
+        summaries=summaries,
+        processed_gts=processed_gts,
+        retrival_eval_model=retrival_eval_model,
+    )
 
     scores = []
     for i, (solution_str, ground_truth, summary, data_source) in enumerate(zip(solution_strs, ground_truths, summaries, data_sources)):
@@ -314,21 +380,29 @@ def batched_compute_score_f1_ver(
 
         rd_score = 0.
         f1_value = 0.
+        process_score = 0.
 
-        if answer is None or summary is None:
+        if answer is None:
             rd_score = 0
         else:
             f1_value = f1_check(answer, ground_truth)
             if f1_value > 0:
                 rd_score = score * f1_value
-            # elif check_if_mark_exist(solution_str):
-            #     rd_score = 0.1
             else:
                 rd_score = format_score
+            process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
+            rd_score += process_score
 
-        # rd_score += batch_retrival_scores[i]
-        
-        save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source,f1_score=f1_value, Search_score=batch_retrival_scores[i])
+        save_results_to_file(
+            solution_str,
+            answer,
+            ground_truth,
+            rd_score,
+            data_source=data_source,
+            f1_score=f1_value,
+            llm_judge_score=process_score,
+            Search_score=answer_claim_scores[i],
+        )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
             print(f"Solution string: {solution_str}")
@@ -337,7 +411,9 @@ def batched_compute_score_f1_ver(
             print(f"Golden answers: {ground_truth}")
             print(f"Score: {rd_score}")
             print(f"F1 value: {f1_value}")
-            print(f"Search_score: {batch_retrival_scores[i]}")
+            print(f"Format_score: {format_scores[i]}")
+            print(f"Answer_claim_score: {answer_claim_scores[i]}")
+            print(f"Bridge_score: {bridge_scores[i]}")
             print(f"data_source: {data_source}")
             
 
@@ -375,31 +451,39 @@ def batched_compute_score_em_ver(
     # Data length check
     assert len(solution_strs) == len(ground_truths) == len(summaries), "All lists must be the same length"
 
-    # Batch inference for retrieval scores
-    # batch_retrival_scores = [0.0] * len(solution_strs)
-    if retrival_eval_model is not None:
-        batch_retrival_scores = ray.get(
-            retrival_eval_model.batch_retrival_score_fast.remote(ground_truths = processed_gts, retrival_infos = summaries)
-        )
+    format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
+        solution_strs=solution_strs,
+        summaries=summaries,
+        processed_gts=processed_gts,
+        retrival_eval_model=retrival_eval_model,
+    )
 
     scores = []
     for i, (solution_str, ground_truth, summary, data_source) in enumerate(zip(solution_strs, ground_truths, summaries, data_sources)):
         answer = extract_solution(solution_str)
 
         rd_score = 0.
+        process_score = 0.
 
-        if answer is None or summary is None:
+        if answer is None:
             rd_score = 0
         else:
             if em_check(answer, ground_truth):
                 rd_score = score # 1.0
-            # elif check_if_mark_exist(solution_str):
-            #     rd_score = 0.1
             else:
                 rd_score = format_score # 0.0
-        # rd_score += batch_retrival_scores[i]
-        
-        save_results_to_file(solution_str, answer, ground_truth, rd_score, data_source=data_source, Search_score=batch_retrival_scores[i])
+            process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
+            rd_score += process_score
+
+        save_results_to_file(
+            solution_str,
+            answer,
+            ground_truth,
+            rd_score,
+            data_source=data_source,
+            llm_judge_score=process_score,
+            Search_score=answer_claim_scores[i],
+        )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
             print(f"Solution string: {solution_str}")
@@ -407,7 +491,9 @@ def batched_compute_score_em_ver(
             print(f"Extracted answer: {answer}")
             print(f"Golden answers: {ground_truth}")
             print(f"Score: {rd_score}")
-            print(f"Search_score: {batch_retrival_scores[i]}")
+            print(f"Format_score: {format_scores[i]}")
+            print(f"Answer_claim_score: {answer_claim_scores[i]}")
+            print(f"Bridge_score: {bridge_scores[i]}")
             print(f"data_source: {data_source}")
             
 

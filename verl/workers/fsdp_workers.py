@@ -316,6 +316,32 @@ class ActorRolloutRefWorker(Worker):
             # get the original unwrapped module
             self.actor_module = self.actor_module_fsdp._fsdp_wrapped_module
 
+            # Resume optimizer and LR scheduler from checkpoint if available
+            resume_path = self.config.model.get('resume_from', None)
+            if self._is_actor and resume_path and self.actor_optimizer is not None:
+                from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+                optim_path = os.path.join(resume_path, 'optimizer.pt')
+                if os.path.exists(optim_path):
+                    full_osd = torch.load(optim_path, map_location='cpu')
+                    sharded_osd = FSDP.optim_state_dict_to_load(
+                        self.actor_module_fsdp, self.actor_optimizer, full_osd
+                    )
+                    self.actor_optimizer.load_state_dict(sharded_osd)
+                    del full_osd, sharded_osd
+                    if self.rank == 0:
+                        print(f'[Resume] Loaded optimizer state from {optim_path}')
+                else:
+                    if self.rank == 0:
+                        print(f'[Resume] No optimizer.pt found at {resume_path}, starting with fresh optimizer')
+
+                scheduler_path = os.path.join(resume_path, 'lr_scheduler.pt')
+                if self.actor_lr_scheduler is not None and os.path.exists(scheduler_path):
+                    self.actor_lr_scheduler.load_state_dict(
+                        torch.load(scheduler_path, map_location='cpu')
+                    )
+                    if self.rank == 0:
+                        print(f'[Resume] Loaded LR scheduler state from {scheduler_path}')
+
             if self._is_offload_param:
                 # param is require during state_dict in sharding manager
                 offload_fsdp_grad(module=self.actor_module_fsdp)
@@ -517,18 +543,30 @@ class ActorRolloutRefWorker(Worker):
             load_fsdp_param_and_grad(module=self.actor_module_fsdp,
                                      device_id=torch.cuda.current_device(),
                                      load_grad=self._is_offload_grad)
+        if self._is_offload_optimizer:
+            load_fsdp_optimizer(optimizer=self.actor_optimizer, device_id=torch.cuda.current_device())
 
-        # TODO: support DCP and save sharded checkpoints
         import torch.distributed
         from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, StateDictType, FullStateDictConfig
         cfg = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
         with FSDP.state_dict_type(self.actor.actor_module, StateDictType.FULL_STATE_DICT, cfg):
             state_dict = self.actor.actor_module.state_dict()
+
+        # Gather full optimizer state dict (materialized on rank 0)
+        optim_state = FSDP.full_optim_state_dict(self.actor_module_fsdp, self.actor_optimizer)
+
         if self.rank == 0:
             print(f'Saving actor checkpoint to {local_path}')
             os.makedirs(local_path, exist_ok=True)
             self.actor_module.save_pretrained(local_path, state_dict=state_dict)
             self.tokenizer.save_pretrained(local_path)
+
+            torch.save(optim_state, os.path.join(local_path, 'optimizer.pt'))
+            if self.actor_lr_scheduler is not None:
+                torch.save(self.actor_lr_scheduler.state_dict(),
+                           os.path.join(local_path, 'lr_scheduler.pt'))
+            print(f'Saved optimizer and lr_scheduler to {local_path}')
+
             if hdfs_path is not None:
                 print(f'Uploading actor checkpoint to {hdfs_path}')
                 hdfs_io.makedirs(hdfs_path, exist_ok=True)
@@ -537,6 +575,8 @@ class ActorRolloutRefWorker(Worker):
         torch.distributed.barrier()
         if self._is_offload_param:
             offload_fsdp_param_and_grad(module=self.actor_module_fsdp, offload_grad=self._is_offload_grad)
+        if self._is_offload_optimizer:
+            offload_fsdp_optimizer(optimizer=self.actor_optimizer)
 
 
 class CriticWorker(Worker):

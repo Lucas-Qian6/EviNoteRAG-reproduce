@@ -10,7 +10,7 @@ python3 -m ray.scripts.scripts start --head
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='0430_step30_3'
+EXPERIMENT_NAME='0501'
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.

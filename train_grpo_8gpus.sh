@@ -10,7 +10,7 @@ python3 -m ray.scripts.scripts start --head
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='0501'
+EXPERIMENT_NAME='reproduce_training'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-upstream}"
@@ -31,8 +31,8 @@ export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_dotraining2.parquet \
-    data.val_files=./data_preprocess/data/m_test_dotraining2.parquet \
+    data.train_files=./data_preprocess/data/m_train.parquet \
+    data.val_files=./data_preprocess/data/m_test.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=210 \
@@ -85,5 +85,5 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    retriever.decompose_claims=true \
+    retriever.decompose_claims=false \
     2>&1 | tee ${OUTPUT_DIR}/${DATE}.log 

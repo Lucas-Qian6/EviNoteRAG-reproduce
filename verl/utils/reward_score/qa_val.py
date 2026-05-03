@@ -27,30 +27,18 @@ logging.basicConfig(level=logging.INFO)
 import ray
 
 
-def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None):
-    """Save the results to a file with a counter."""
-    # Add a counter to the generation part; here just read the counter
+def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None, trajectory_split="eval"):
+    """Save each eval trajectory as one JSONL row."""
     try:
-        # Create output directory
-        os.makedirs(os.path.dirname("./outputs/eval/"), exist_ok=True)
-        
-        count_file_path = "./outputs/eval/count.txt"
-        current_count = 0
-        
-        # # Handle the counter file, read if it exists (usually it does)
-        if os.path.exists(count_file_path):
-            with open(count_file_path, 'r', encoding='utf-8') as f:
-                count_str = f.read().strip()
-                if count_str.isdigit():
-                    current_count = int(count_str)
-        else:
-             # Create a new counter file
-            with open(count_file_path, 'w', encoding='utf-8') as f:
-                f.write('0')
-                logging.info("Created new counter file: count.txt")
-        
-        # Generate the file name with the counter
-        json_file_path = f"./outputs/eval/train_{current_count}.jsonl"
+        if trajectory_split == "skip":
+            return
+        env_key = "EVAL_TRAJECTORY_LOG_FILE" if trajectory_split == "eval" else "TRAIN_TRAJECTORY_LOG_FILE"
+        default_file = f"./outputs/eval/{trajectory_split}_trajectories.jsonl"
+        json_file_path = os.environ.get(
+            env_key,
+            default_file,
+        )
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
         
         # Save data to the new file
         save_json = {
@@ -62,6 +50,7 @@ def save_results_to_file(solution_str, answer_content, ground_truths, max_score,
             "llm_judge_score": llm_judge_score,
             "Search_score": Search_score,
             "data_source":data_source,
+            "split": trajectory_split,
         }
         json_line = json.dumps(save_json, ensure_ascii=False)
         
@@ -215,6 +204,7 @@ def compute_score_f1_batch(
             format_score=0,
             score=1.0,
             retrival_eval_model=None,
+            trajectory_split="eval",
         ):
     """
     The scoring function for F1 score.
@@ -267,6 +257,7 @@ def compute_score_em_batch(
             format_score=0,
             score=1.0,
             retrival_eval_model=None,
+            trajectory_split="eval",
         ):
     """
     The scoring function for em score.
@@ -292,7 +283,7 @@ def compute_score_em_batch(
             else:
                 reward_score =  format_score
 
-        # save_results_to_file(solution_str, answer, ground_truth, max_score=reward_score, data_source=data_source)
+        save_results_to_file(solution_str, answer, ground_truth, max_score=reward_score, data_source=data_source, trajectory_split=trajectory_split)
         do_print = random.randint(1, 64) == 1
         if do_print:
             print(f"-------------- [val: em] ----------------")
@@ -318,6 +309,7 @@ def compute_score_retrival_batch(
             format_score=0,
             score=1.0,
             retrival_eval_model=None,
+            trajectory_split="eval",
         ):
     """
     The scoring function for retrival score.

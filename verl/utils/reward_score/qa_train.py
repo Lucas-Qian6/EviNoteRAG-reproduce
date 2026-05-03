@@ -25,34 +25,52 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
+REWARD_MODE_ENV = "EVINOTE_REWARD_MODE"
 ROLE_FORMAT_REWARD_WEIGHT = float(os.environ.get("ROLE_FORMAT_REWARD_WEIGHT", "0.05"))
 ANSWER_CLAIM_REWARD_WEIGHT = float(os.environ.get("ANSWER_CLAIM_REWARD_WEIGHT", "0.3"))
 BRIDGE_REWARD_WEIGHT = float(os.environ.get("BRIDGE_REWARD_WEIGHT", "0.0"))
 
-def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None):
-    """Save the results to a file with a counter."""
-    # Add a counter to the generation part; here just read the counter
+def get_reward_mode():
+    reward_mode = os.environ.get(REWARD_MODE_ENV, "upstream").strip().lower()
+    aliases = {
+        "original": "upstream",
+        "github": "upstream",
+        "evinote": "upstream",
+        "process": "custom",
+        "claim": "custom",
+        "claim_level": "custom",
+    }
+    reward_mode = aliases.get(reward_mode, reward_mode)
+    if reward_mode not in {"upstream", "custom"}:
+        raise ValueError(
+            f"Unsupported {REWARD_MODE_ENV}={reward_mode!r}. "
+            "Use 'upstream' or 'custom'."
+        )
+    return reward_mode
+
+
+def compute_upstream_retrieval_scores(processed_gts, summaries, retrival_eval_model):
+    if retrival_eval_model is None:
+        return [0.0] * len(summaries)
+    return ray.get(
+        retrival_eval_model.batch_retrival_score_fast.remote(
+            ground_truths=processed_gts,
+            retrival_infos=summaries,
+        )
+    )
+
+def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None, trajectory_split="train"):
+    """Save each training trajectory as one JSONL row."""
     try:
-        # Create output directory
-        os.makedirs(os.path.dirname("./outputs/eval/"), exist_ok=True)
-        
-        count_file_path = "./outputs/eval/count.txt"
-        current_count = 0
-        
-        # # Handle the counter file, read if it exists (usually it does)
-        if os.path.exists(count_file_path):
-            with open(count_file_path, 'r', encoding='utf-8') as f:
-                count_str = f.read().strip()
-                if count_str.isdigit():
-                    current_count = int(count_str)
-        else:
-             # Create a new counter file
-            with open(count_file_path, 'w', encoding='utf-8') as f:
-                f.write('0')
-                logging.info("Created new counter file: count.txt")
-        
-        # Generate the file name with the counter
-        json_file_path = f"./outputs/eval/train_{current_count}.jsonl"
+        if trajectory_split == "skip":
+            return
+        env_key = "EVAL_TRAJECTORY_LOG_FILE" if trajectory_split == "eval" else "TRAIN_TRAJECTORY_LOG_FILE"
+        default_file = f"./outputs/eval/{trajectory_split}_trajectories.jsonl"
+        json_file_path = os.environ.get(
+            env_key,
+            default_file,
+        )
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
         
         # Save data to the new file
         save_json = {
@@ -64,6 +82,7 @@ def save_results_to_file(solution_str, answer_content, ground_truths, max_score,
             "llm_judge_score": llm_judge_score,
             "Search_score": Search_score,
             "data_source":data_source,
+            "split": trajectory_split,
         }
         json_line = json.dumps(save_json, ensure_ascii=False)
         
@@ -347,7 +366,8 @@ def batched_compute_score_f1_ver(
     data_sources,
     format_score=0., 
     score=1., 
-    retrival_eval_model=None
+    retrival_eval_model=None,
+    trajectory_split="train",
 ):
     """
     Batch process multiple samples to avoid single-instance model inference.
@@ -367,12 +387,20 @@ def batched_compute_score_f1_ver(
     # Data length check
     assert len(solution_strs) == len(ground_truths) == len(summaries), "All lists must be the same length"
 
-    format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
-        solution_strs=solution_strs,
-        summaries=summaries,
-        processed_gts=processed_gts,
-        retrival_eval_model=retrival_eval_model,
-    )
+    reward_mode = get_reward_mode()
+    if reward_mode == "custom":
+        format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
+            solution_strs=solution_strs,
+            summaries=summaries,
+            processed_gts=processed_gts,
+            retrival_eval_model=retrival_eval_model,
+        )
+    else:
+        batch_retrival_scores = compute_upstream_retrieval_scores(
+            processed_gts=processed_gts,
+            summaries=summaries,
+            retrival_eval_model=retrival_eval_model,
+        )
 
     scores = []
     for i, (solution_str, ground_truth, summary, data_source) in enumerate(zip(solution_strs, ground_truths, summaries, data_sources)):
@@ -381,17 +409,33 @@ def batched_compute_score_f1_ver(
         rd_score = 0.
         f1_value = 0.
         process_score = 0.
+        search_score = 0.
 
-        if answer is None:
-            rd_score = 0
-        else:
-            f1_value = f1_check(answer, ground_truth)
-            if f1_value > 0:
-                rd_score = score * f1_value
+        if reward_mode == "upstream":
+            if answer is None or summary is None:
+                rd_score = 0
             else:
-                rd_score = format_score
-            process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
-            rd_score += process_score
+                f1_value = f1_check(answer, ground_truth)
+                if f1_value > 0:
+                    rd_score = score * f1_value
+                elif check_if_mark_exist(solution_str):
+                    rd_score = 0.1
+                else:
+                    rd_score = format_score
+            search_score = batch_retrival_scores[i]
+            rd_score += search_score
+        else:
+            if answer is None:
+                rd_score = 0
+            else:
+                f1_value = f1_check(answer, ground_truth)
+                if f1_value > 0:
+                    rd_score = score * f1_value
+                else:
+                    rd_score = format_score
+                process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
+                search_score = answer_claim_scores[i]
+                rd_score += process_score
 
         save_results_to_file(
             solution_str,
@@ -401,7 +445,8 @@ def batched_compute_score_f1_ver(
             data_source=data_source,
             f1_score=f1_value,
             llm_judge_score=process_score,
-            Search_score=answer_claim_scores[i],
+            Search_score=search_score,
+            trajectory_split=trajectory_split,
         )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
@@ -411,9 +456,13 @@ def batched_compute_score_f1_ver(
             print(f"Golden answers: {ground_truth}")
             print(f"Score: {rd_score}")
             print(f"F1 value: {f1_value}")
-            print(f"Format_score: {format_scores[i]}")
-            print(f"Answer_claim_score: {answer_claim_scores[i]}")
-            print(f"Bridge_score: {bridge_scores[i]}")
+            print(f"Reward_mode: {reward_mode}")
+            if reward_mode == "custom":
+                print(f"Format_score: {format_scores[i]}")
+                print(f"Answer_claim_score: {answer_claim_scores[i]}")
+                print(f"Bridge_score: {bridge_scores[i]}")
+            else:
+                print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")
             
 
@@ -431,7 +480,8 @@ def batched_compute_score_em_ver(
     data_sources,
     format_score=0., 
     score=1., 
-    retrival_eval_model=None
+    retrival_eval_model=None,
+    trajectory_split="train",
 ):
     """
     Batch process multiple samples to avoid single-instance model inference.
@@ -451,12 +501,20 @@ def batched_compute_score_em_ver(
     # Data length check
     assert len(solution_strs) == len(ground_truths) == len(summaries), "All lists must be the same length"
 
-    format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
-        solution_strs=solution_strs,
-        summaries=summaries,
-        processed_gts=processed_gts,
-        retrival_eval_model=retrival_eval_model,
-    )
+    reward_mode = get_reward_mode()
+    if reward_mode == "custom":
+        format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
+            solution_strs=solution_strs,
+            summaries=summaries,
+            processed_gts=processed_gts,
+            retrival_eval_model=retrival_eval_model,
+        )
+    else:
+        batch_retrival_scores = compute_upstream_retrieval_scores(
+            processed_gts=processed_gts,
+            summaries=summaries,
+            retrival_eval_model=retrival_eval_model,
+        )
 
     scores = []
     for i, (solution_str, ground_truth, summary, data_source) in enumerate(zip(solution_strs, ground_truths, summaries, data_sources)):
@@ -464,16 +522,31 @@ def batched_compute_score_em_ver(
 
         rd_score = 0.
         process_score = 0.
+        search_score = 0.
 
-        if answer is None:
-            rd_score = 0
-        else:
-            if em_check(answer, ground_truth):
-                rd_score = score # 1.0
+        if reward_mode == "upstream":
+            if answer is None or summary is None:
+                rd_score = 0
             else:
-                rd_score = format_score # 0.0
-            process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
-            rd_score += process_score
+                if em_check(answer, ground_truth):
+                    rd_score = score # 1.0
+                elif check_if_mark_exist(solution_str):
+                    rd_score = 0.1
+                else:
+                    rd_score = format_score # 0.0
+            search_score = batch_retrival_scores[i]
+            rd_score += search_score
+        else:
+            if answer is None:
+                rd_score = 0
+            else:
+                if em_check(answer, ground_truth):
+                    rd_score = score # 1.0
+                else:
+                    rd_score = format_score # 0.0
+                process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
+                search_score = answer_claim_scores[i]
+                rd_score += process_score
 
         save_results_to_file(
             solution_str,
@@ -482,7 +555,8 @@ def batched_compute_score_em_ver(
             rd_score,
             data_source=data_source,
             llm_judge_score=process_score,
-            Search_score=answer_claim_scores[i],
+            Search_score=search_score,
+            trajectory_split=trajectory_split,
         )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
@@ -491,9 +565,13 @@ def batched_compute_score_em_ver(
             print(f"Extracted answer: {answer}")
             print(f"Golden answers: {ground_truth}")
             print(f"Score: {rd_score}")
-            print(f"Format_score: {format_scores[i]}")
-            print(f"Answer_claim_score: {answer_claim_scores[i]}")
-            print(f"Bridge_score: {bridge_scores[i]}")
+            print(f"Reward_mode: {reward_mode}")
+            if reward_mode == "custom":
+                print(f"Format_score: {format_scores[i]}")
+                print(f"Answer_claim_score: {answer_claim_scores[i]}")
+                print(f"Bridge_score: {bridge_scores[i]}")
+            else:
+                print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")
             
 

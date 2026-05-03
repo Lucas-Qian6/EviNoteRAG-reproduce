@@ -12,6 +12,9 @@ export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
 EXPERIMENT_NAME='0501'
 
+# upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
+export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-upstream}"
+
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
 # Old checkpoints named global_step_N are supported even if training_state.json is missing.
@@ -20,8 +23,12 @@ RESUME_FROM=''
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 DATE=$(date '+%Y-%m-%d-%H-%M-%S')
-mkdir -p ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
+OUTPUT_DIR=./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
+mkdir -p ${OUTPUT_DIR}
+export TRAIN_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_train_trajectories.jsonl"
+export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 
+echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     data.train_files=./data_preprocess/data/m_train_dotraining2.parquet \
@@ -78,4 +85,5 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    2>&1 | tee ./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}/${DATE}.log 
+    retriever.decompose_claims=true \
+    2>&1 | tee ${OUTPUT_DIR}/${DATE}.log 

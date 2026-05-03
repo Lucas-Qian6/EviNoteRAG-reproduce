@@ -472,6 +472,7 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
+            decompose_claims = self.config.retriever.decompose_claims,
         )
 
         # print(f"[validate] torch.cuda.is_available(): {torch.cuda.is_available()}")
@@ -509,6 +510,7 @@ class RayPPOTrainer(object):
                 print('validation generation end')
 
                 test_batch = test_batch.union(test_output_gen_batch)
+                test_batch.meta_info['trajectory_split'] = 'eval'
 
                 # evaluate using reward_function
                 # for certain reward function (e.g. sandbox), the generation can overlap with reward
@@ -542,6 +544,7 @@ class RayPPOTrainer(object):
                     
                     for key in test_batch.batch.keys():
                         test_batch.batch[key] = test_batch.batch[key].long()
+                    test_batch.meta_info['trajectory_split'] = 'eval'
                     
                     # evaluate using reward_function
                     # for certain reward function (e.g. sandbox), the generation can overlap with reward
@@ -606,6 +609,7 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
+            decompose_claims = self.config.retriever.decompose_claims,
         )
 
 
@@ -642,6 +646,7 @@ class RayPPOTrainer(object):
                 print('validation generation end')
 
                 test_batch = test_batch.union(test_output_gen_batch)
+                test_batch.meta_info['trajectory_split'] = 'eval'
 
                 # evaluate using reward_function
                 # for certain reward function (e.g. sandbox), the generation can overlap with reward
@@ -675,6 +680,7 @@ class RayPPOTrainer(object):
                     
                     for key in test_batch.batch.keys():
                         test_batch.batch[key] = test_batch.batch[key].long()
+                    test_batch.meta_info['trajectory_split'] = 'eval'
                     
                     # evaluate using reward_function
                     # for certain reward function (e.g. sandbox), the generation can overlap with reward
@@ -890,6 +896,7 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
+            decompose_claims = self.config.retriever.decompose_claims,
         )
 
 
@@ -955,6 +962,7 @@ class RayPPOTrainer(object):
                         # repeat to align with repeated responses in rollout
                         batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                         batch = batch.union(final_gen_batch_output)
+                        batch.meta_info['trajectory_split'] = 'train'
 
 
                     # balance the number of valid tokens on each dp rank.

@@ -49,6 +49,9 @@ class RewardManager():
 
 
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+        trajectory_split = data.meta_info.get('trajectory_split', 'train') if hasattr(data, 'meta_info') else 'train'
+        if trajectory_split == 'eval' and val_type != 'em':
+            trajectory_split = 'skip'
 
         sequences_list = []
         ground_truth_list = []
@@ -104,7 +107,8 @@ class RewardManager():
             data_sources = data_source_list,
             format_score=self.format_score,
             score=1.0,
-            retrival_eval_model=self.model_holder
+            retrival_eval_model=self.model_holder,
+            trajectory_split=trajectory_split,
         )
         scores = ray.get(future)  # Retrieve all results
 

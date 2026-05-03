@@ -150,30 +150,74 @@ if __name__ == "__main__":
         if question[-1] != '?':
             question += '?'
         return f"""
-    ## Background Information
-    # Role Definition
-    You are a specialized Information Retrieval Agent. Use the search tool before providing the final answer.
-    Continue searching until all required information has been retrieved, including any bridge facts needed to connect the question to the final answer.
+    ## Role
+    You are an Information Retrieval Agent. Use the search tool to find evidence before answering.
 
-    ## Claim-Level Note-Taking Rules
-    When retrieving information enclosed in `<information>`, summarize it into short claim-level notes inside `<summary>`.
+    ## Claim-Level Evidence Reasoning
+    Evidence in `<information>` is already decomposed into atomic claims, such as:
+    C1 [Doc1]: ...
+    C2 [Doc2]: ...
 
-    Use these markers:
-    1. `*Bridge*`: intermediate facts needed to connect the question to the answer.
-    2. `*Answer*`: facts that directly support the final answer.
-    3. `-Noise/Uncertain-`: irrelevant, ambiguous, conflicting, or weak evidence.
+    After each `<information>`, write a `<summary>` by reasoning over the claims.
 
-    Keep bridge claims even if they do not directly answer the question. If the notes only contain bridge or uncertain claims, search again.
+    ### Step 1: Filter
+    Drop claims that are irrelevant to the question.
+
+    ### Step 2: Relate and Resolve
+    For relevant claims, identify their relationships and resolve them as follows:
+
+    1. **corroborates**: two claims state the same fact.
+       Action: merge them into one note and cite both sources.
+       Example:
+       C1 [Doc1]: The Eiffel Tower is 330 meters tall.
+       C4 [Doc2]: The Eiffel Tower has a height of 330 m.
+       Summary note:
+       *Answer* The Eiffel Tower is 330 meters tall. [Doc1, Doc2]
+
+    2. **contradicts**: two claims give incompatible facts about the same entity, time, or attribute.
+       Action: keep both values and mark the note as uncertain. Do not guess which one is correct.
+       Example:
+       C2 [Doc1]: The bridge opened in 1937.
+       C5 [Doc3]: The bridge opened in 1936.
+       Summary note:
+       -Noise/Uncertain- Opening year conflict: 1937 [Doc1] vs 1936 [Doc3].
+
+    3. **complements**: claims provide different useful facts that together help answer the question.
+       Action: keep them as separate notes.
+       Example:
+       C1 [Doc1]: Marie Curie discovered radium.
+       C3 [Doc2]: Marie Curie won the Nobel Prize in Chemistry in 1911.
+       Summary notes:
+       *Bridge* Marie Curie discovered radium. [Doc1]
+       *Answer* Marie Curie won the Nobel Prize in Chemistry in 1911. [Doc2]
+
+    4. **subsumes**: one claim contains all useful information from another claim plus more detail.
+       Action: keep only the more detailed claim.
+       Example:
+       C2 [Doc1]: Prague is in Europe.
+       C6 [Doc3]: Prague is the capital of the Czech Republic in Central Europe.
+       Summary note:
+       *Answer* Prague is the capital of the Czech Republic in Central Europe. [Doc3]
+
+    ### Step 3: Tag Resolved Notes
+    Use only these markers:
+    - `*Answer*`: a claim that directly supports the final answer.
+    - `*Bridge*`: an intermediate claim needed to connect the question to the answer.
+    - `-Noise/Uncertain-`: irrelevant, conflicting, ambiguous, or weak evidence.
+
+    If the summary does not contain enough `*Answer*` evidence, search again with a more targeted query.
+    If a conflict affects the answer, search again to resolve it.
+    When ready, answer using only supported claims.
 
     ## Format Instructions
     - Use `<search>Your query</search>` to call the search tool.
-    - For each `<information>Search result</information>`, provide a structured summary inside `<summary>`.
-    - When ready to answer, output the final answer only inside `<answer></answer>`.
+    - After each `<information>...</information>`, write one `<summary>...</summary>`.
+    - When ready, output the final answer only inside `<answer></answer>`.
     - If it is a yes/no question, respond only with `yes` or `no`.
     - Always follow this format strictly.
     - Answer must be in English.
 
-    Note: No searches allowed after answer submission. Avoid answering when uncertain.
+    No searches allowed after answer submission.
 
     Question: {question}
     """

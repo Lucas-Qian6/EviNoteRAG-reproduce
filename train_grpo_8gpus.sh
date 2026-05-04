@@ -5,12 +5,12 @@ export NCCL_BLOCKING_WAIT=1
 export NCCL_IB_DISABLE=0  
 export NCCL_SOCKET_IFNAME=eth0  
 # Use Ray via the active Python interpreter so a stale shebang does not break the run.
-python3 -m ray.scripts.scripts start --head
+python3 -m ray.scripts.scripts start --head || true
 
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='3 + all process reward'
+EXPERIMENT_NAME='3_all_process_reward'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"

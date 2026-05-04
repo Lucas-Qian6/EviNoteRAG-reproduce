@@ -34,8 +34,23 @@ from verl.workers.reward_manager import RewardManager
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
 def main(config):
     if not ray.is_initialized():
+        env_vars = {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}
+        for key in (
+            'TRAIN_TRAJECTORY_LOG_FILE',
+            'EVAL_TRAJECTORY_LOG_FILE',
+            'EVINOTE_REWARD_MODE',
+            'ROLE_FORMAT_REWARD_WEIGHT',
+            'ANSWER_CLAIM_REWARD_WEIGHT',
+            'BRIDGE_REWARD_WEIGHT',
+            'VLLM_ATTENTION_BACKEND',
+            'VLLM_USE_V1',
+            'TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD',
+        ):
+            value = os.environ.get(key)
+            if value is not None:
+                env_vars[key] = value
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(runtime_env={'env_vars': env_vars})
     ray.get(main_task.remote(config))
 
 

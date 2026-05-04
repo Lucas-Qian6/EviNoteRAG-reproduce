@@ -23,7 +23,7 @@ RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/reproduce_training/actor/global_s
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 DATE=$(date '+%Y-%m-%d-%H-%M-%S')
-OUTPUT_DIR=./outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}
+OUTPUT_DIR="$(pwd)/outputs/${WAND_PROJECT}/${EXPERIMENT_NAME}"
 mkdir -p ${OUTPUT_DIR}
 export TRAIN_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_train_trajectories.jsonl"
 export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"

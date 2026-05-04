@@ -54,7 +54,7 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
             relative_path = os.path.relpath(file_path, input_dir)
             base_name, _ = os.path.splitext(relative_path)
             # output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
-            output_file = os.path.join(output_dir, f"{base_name}_dotraining2.parquet")
+            output_file = os.path.join(output_dir, f"{base_name}_dotraining3.parquet")
             
             # Create output directories
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -167,37 +167,37 @@ if __name__ == "__main__":
     For relevant claims, identify their relationships and resolve them as follows:
 
     1. **corroborates**: two claims state the same fact.
-       Action: merge them into one note and cite both sources.
-       Example:
-       C1 [Doc1]: The Eiffel Tower is 330 meters tall.
-       C4 [Doc2]: The Eiffel Tower has a height of 330 m.
-       Summary note:
-       *Answer* The Eiffel Tower is 330 meters tall. [Doc1, Doc2]
+    Action: merge them into one note and cite both sources.
+    Example:
+    C1 [Doc1]: The Eiffel Tower is 330 meters tall.
+    C4 [Doc2]: The Eiffel Tower has a height of 330 m.
+    Summary note:
+    *Answer* The Eiffel Tower is 330 meters tall. [Doc1, Doc2]
 
     2. **contradicts**: two claims give incompatible facts about the same entity, time, or attribute.
-       Action: keep both values and mark the note as uncertain. Do not guess which one is correct.
-       Example:
-       C2 [Doc1]: The bridge opened in 1937.
-       C5 [Doc3]: The bridge opened in 1936.
-       Summary note:
-       -Noise/Uncertain- Opening year conflict: 1937 [Doc1] vs 1936 [Doc3].
+    Action: keep both values and mark the note as uncertain. Do not guess which one is correct.
+    Example:
+    C2 [Doc1]: The bridge opened in 1937.
+    C5 [Doc3]: The bridge opened in 1936.
+    Summary note:
+    -Noise/Uncertain- Opening year conflict: 1937 [Doc1] vs 1936 [Doc3].
 
     3. **complements**: claims provide different useful facts that together help answer the question.
-       Action: keep them as separate notes.
-       Example:
-       C1 [Doc1]: Marie Curie discovered radium.
-       C3 [Doc2]: Marie Curie won the Nobel Prize in Chemistry in 1911.
-       Summary notes:
-       *Bridge* Marie Curie discovered radium. [Doc1]
-       *Answer* Marie Curie won the Nobel Prize in Chemistry in 1911. [Doc2]
+    Action: keep them as separate notes.
+    Example:
+    C1 [Doc1]: Marie Curie discovered radium.
+    C3 [Doc2]: Marie Curie won the Nobel Prize in Chemistry in 1911.
+    Summary notes:
+    *Bridge* Marie Curie discovered radium. [Doc1]
+    *Answer* Marie Curie won the Nobel Prize in Chemistry in 1911. [Doc2]
 
     4. **subsumes**: one claim contains all useful information from another claim plus more detail.
-       Action: keep only the more detailed claim.
-       Example:
-       C2 [Doc1]: Prague is in Europe.
-       C6 [Doc3]: Prague is the capital of the Czech Republic in Central Europe.
-       Summary note:
-       *Answer* Prague is the capital of the Czech Republic in Central Europe. [Doc3]
+    Action: keep only the more detailed claim.
+    Example:
+    C2 [Doc1]: Prague is in Europe.
+    C6 [Doc3]: Prague is the capital of the Czech Republic in Central Europe.
+    Summary note:
+    *Answer* Prague is the capital of the Czech Republic in Central Europe. [Doc3]
 
     ### Step 3: Tag Resolved Notes
     Use only these markers:
@@ -205,9 +205,16 @@ if __name__ == "__main__":
     - `*Bridge*`: an intermediate claim needed to connect the question to the answer.
     - `-Noise/Uncertain-`: irrelevant, conflicting, ambiguous, or weak evidence.
 
-    If the summary does not contain enough `*Answer*` evidence, search again with a more targeted query.
-    If a conflict affects the answer, search again to resolve it.
-    When ready, answer using only supported claims.
+    ## Search Strategy
+    Before issuing each new search, do the following:
+
+    1. Break the original question into the sub-questions it implies (e.g., who, what, when, where, how many).
+    2. Review the `*Answer*` and `*Bridge*` notes accumulated across **all previous summaries**.
+    3. Identify which sub-question is least covered or still uncertain.
+    4. Write a query that targets exactly that gap — not the whole question again.
+
+    Only search for the missing piece. Do not repeat a broad query if partial evidence already exists.
+    If a `-Noise/Uncertain-` conflict affects the answer, the next search should target resolving that specific conflict.
 
     ## Format Instructions
     - Use `<search>Your query</search>` to call the search tool.

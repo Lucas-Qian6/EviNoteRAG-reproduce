@@ -31,8 +31,8 @@ export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train.parquet \
-    data.val_files=./data_preprocess/data/m_test.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining3.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining3.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=294 \

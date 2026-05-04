@@ -10,15 +10,15 @@ python3 -m ray.scripts.scripts start --head
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='reproduce_training'
+EXPERIMENT_NAME='3 + all process reward'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
-export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-upstream}"
+export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
 # Old checkpoints named global_step_N are supported even if training_state.json is missing.
-RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/reproduce_training/actor/global_step_75'
+RESUME_FROM=''
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -46,7 +46,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.model.enable_gradient_checkpointing=true \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.optim.lr=1e-5 \
     actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0.078 \
     actor_rollout_ref.actor.ppo_mini_batch_size=147 \
     actor_rollout_ref.actor.ppo_micro_batch_size=21 \
@@ -85,5 +85,5 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    retriever.decompose_claims=false \
+    retriever.decompose_claims=true \
     2>&1 | tee ${OUTPUT_DIR}/${DATE}.log 

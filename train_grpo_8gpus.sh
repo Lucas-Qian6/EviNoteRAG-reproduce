@@ -18,7 +18,7 @@ export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-upstream}"
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
 # Old checkpoints named global_step_N are supported even if training_state.json is missing.
-RESUME_FROM=''
+RESUME_FROM='/mnt/finder/qyj/models/EviNoteRAG/reproduce_training/actor/global_step_75'
 
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues

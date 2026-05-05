@@ -10,7 +10,7 @@ python3 -m ray.scripts.scripts start --head || true
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='4'
+EXPERIMENT_NAME='4_tool_uses'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"

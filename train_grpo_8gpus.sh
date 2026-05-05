@@ -10,7 +10,7 @@ python3 -m ray.scripts.scripts start --head || true
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='3_all_process_reward'
+EXPERIMENT_NAME='4'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"
@@ -31,8 +31,8 @@ export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_dotraining3.parquet \
-    data.val_files=./data_preprocess/data/m_test_dotraining3.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining4.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining4.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=294 \
@@ -46,7 +46,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.model.enable_gradient_checkpointing=true \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.optim.lr=1e-5 \
+    actor_rollout_ref.actor.optim.lr=5e-6 \
     actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0.078 \
     actor_rollout_ref.actor.ppo_mini_batch_size=147 \
     actor_rollout_ref.actor.ppo_micro_batch_size=21 \
@@ -60,7 +60,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
     actor_rollout_ref.ref.log_prob_micro_batch_size=120 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
-    actor_rollout_ref.actor.kl_loss_coef=0.001 \
+    actor_rollout_ref.actor.kl_loss_coef=0.005 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     algorithm.no_think_rl=false \
     actor_rollout_ref.rollout.temperature=1 \
@@ -81,7 +81,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.total_epochs=1 \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=/mnt/finder/qyj/models/$WAND_PROJECT/$EXPERIMENT_NAME \
-    max_turns=4 \
+    max_turns=10 \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \

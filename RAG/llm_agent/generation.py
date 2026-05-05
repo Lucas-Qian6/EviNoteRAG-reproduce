@@ -96,19 +96,25 @@ class LLMGenerationManager:
             padding="longest"
         )['input_ids']
 
+    _STOP_TAGS = ('</search>', '</answer>', '</relate>', '</summary>')
+
+    def _find_earliest_stop(self, text: str) -> str:
+        """Cut *text* at the earliest recognised closing tag."""
+        best_pos, best_tag = len(text), None
+        for tag in self._STOP_TAGS:
+            pos = text.find(tag)
+            if pos != -1 and pos < best_pos:
+                best_pos, best_tag = pos, tag
+        return text[:best_pos] + best_tag if best_tag else text
+
     def _postprocess_responses(self, responses: torch.Tensor) -> torch.Tensor:
-        """Process responses to stop at search operation or answer operation."""
+        """Process responses to stop at the earliest tool-call closing tag."""
         responses_str = self.tokenizer.batch_decode(
             responses, 
             skip_special_tokens=True
         )
 
-        responses_str = [resp.split('</search>')[0] + '</search>'
-                 if '</search>' in resp 
-                 else resp.split('</answer>')[0] + '</answer>'
-                 if '</answer>' in resp 
-                 else resp
-                 for resp in responses_str]
+        responses_str = [self._find_earliest_stop(resp) for resp in responses_str]
 
         if self.config.no_think_rl:
             raise ValueError('stop')
@@ -538,6 +544,16 @@ class LLMGenerationManager:
                     dones.append(0)
                     valid_action.append(1)
                     is_search.append(1)
+                elif action == 'relate':
+                    next_obs.append('\nRelations recorded. Now tag each resolved note and write the summary.\n')
+                    dones.append(0)
+                    valid_action.append(1)
+                    is_search.append(0)
+                elif action == 'summary':
+                    next_obs.append('\nSummary recorded. Continue searching or provide the final answer.\n')
+                    dones.append(0)
+                    valid_action.append(1)
+                    is_search.append(0)
                 else:
                     next_obs.append(f'\nMy previous action is invalid. \
     If I want to search, I should put the query between <search> and </search>. \
@@ -550,6 +566,10 @@ class LLMGenerationManager:
             
         return next_obs, dones, valid_action, is_search
 
+
+    _ACTION_PATTERN = re.compile(
+        r'<(search|answer|relate|summary)>(.*?)</\1>', re.DOTALL
+    )
 
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
         """
@@ -565,42 +585,10 @@ class LLMGenerationManager:
         contents = []
                 
         for prediction in predictions:
-            if isinstance(prediction, str): # for llm output
-                pattern = r'<(search|answer)>(.*?)</\1>' 
-                match = re.search(pattern, prediction, re.DOTALL)
+            if isinstance(prediction, str):
+                match = self._ACTION_PATTERN.search(prediction)
                 if match:
-                    content = match.group(2).strip()  # Return only the content inside the tags
-                    action = match.group(1)
-                else:
-                    content = ''
-                    action = None
-            else:
-                raise ValueError(f"Invalid prediction type: {type(prediction)}")
-            
-            actions.append(action)
-            contents.append(content)
-            
-        return actions, contents
-    
-    def postprocess_predictions_origion(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
-        """
-        Process (text-based) predictions from llm into actions and validity flags.
-        
-        Args:
-            predictions: List of raw predictions
-            
-        Returns:
-            Tuple of (actions list, validity flags list)
-        """
-        actions = []
-        contents = []
-                
-        for prediction in predictions:
-            if isinstance(prediction, str): # for llm output
-                pattern = r'<(search|answer)>(.*?)</\1>'
-                match = re.search(pattern, prediction, re.DOTALL)
-                if match:
-                    content = match.group(2).strip()  # Return only the content inside the tags
+                    content = match.group(2).strip()
                     action = match.group(1)
                 else:
                     content = ''

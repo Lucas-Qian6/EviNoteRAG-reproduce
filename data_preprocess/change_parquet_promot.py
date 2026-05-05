@@ -54,7 +54,7 @@ def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func
             relative_path = os.path.relpath(file_path, input_dir)
             base_name, _ = os.path.splitext(relative_path)
             # output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
-            output_file = os.path.join(output_dir, f"{base_name}_dotraining3.parquet")
+            output_file = os.path.join(output_dir, f"{base_name}_dotraining4.parquet")
             
             # Create output directories
             os.makedirs(os.path.dirname(output_file), exist_ok=True)

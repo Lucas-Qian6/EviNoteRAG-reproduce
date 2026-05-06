@@ -27,7 +27,12 @@ logging.basicConfig(level=logging.INFO)
 
 REWARD_MODE_ENV = "EVINOTE_REWARD_MODE"
 ROLE_FORMAT_REWARD_WEIGHT = float(os.environ.get("ROLE_FORMAT_REWARD_WEIGHT", "0.05"))
-ANSWER_CLAIM_REWARD_WEIGHT = float(os.environ.get("ANSWER_CLAIM_REWARD_WEIGHT", "0.3"))
+SUMMARY_ENTAILMENT_REWARD_WEIGHT = float(
+    os.environ.get(
+        "SUMMARY_ENTAILMENT_REWARD_WEIGHT",
+        os.environ.get("ANSWER_CLAIM_REWARD_WEIGHT", "0.1"),
+    )
+)
 BRIDGE_REWARD_WEIGHT = float(os.environ.get("BRIDGE_REWARD_WEIGHT", "0.0"))
 
 def get_reward_mode():
@@ -146,42 +151,34 @@ def has_role_claim(summary, role):
     return bool(extract_role_claims(summary, role))
 
 
-def has_valid_role_format(summary):
-    if not isinstance(summary, str):
+def has_valid_role_format(summary, answer=None):
+    if answer is None or not isinstance(summary, str):
         return False
-    return has_role_claim(summary, "*Answer*") or has_role_claim(summary, "*Bridge*")
+    return has_role_claim(summary, "*Answer*")
 
 
-def compute_process_rewards(solution_strs, summaries, processed_gts, retrival_eval_model):
-    """Compute role-aware process rewards for claim-level notes."""
-    n = len(solution_strs)
-    format_scores = [0.0] * n
-    answer_claim_scores = [0.0] * n
-    bridge_scores = [0.0] * n
-    answer_claim_texts = []
+def compute_summary_entailment_scores(summaries, processed_gts, retrival_eval_model):
+    """Compute weighted entailment scores for the whole last summary."""
+    n = len(summaries)
+    summary_entailment_scores = [0.0] * n
 
-    for i, summary in enumerate(summaries):
-        if has_valid_role_format(summary):
-            format_scores[i] = ROLE_FORMAT_REWARD_WEIGHT
-        if has_role_claim(summary, "*Bridge*"):
-            bridge_scores[i] = BRIDGE_REWARD_WEIGHT
-        answer_claim_texts.append(extract_role_claims(summary, "*Answer*"))
-
-    valid_answer_claim_indices = [
-        i for i, claim_text in enumerate(answer_claim_texts)
-        if claim_text.strip() and str(processed_gts[i]).strip()
+    valid_summary_indices = [
+        i for i, summary in enumerate(summaries)
+        if isinstance(summary, str)
+        and summary.strip()
+        and str(processed_gts[i]).strip()
     ]
-    if retrival_eval_model is not None and ANSWER_CLAIM_REWARD_WEIGHT > 0 and valid_answer_claim_indices:
-        raw_answer_claim_scores = ray.get(
+    if retrival_eval_model is not None and SUMMARY_ENTAILMENT_REWARD_WEIGHT > 0 and valid_summary_indices:
+        raw_summary_scores = ray.get(
             retrival_eval_model.batch_retrival_score_fast.remote(
-                ground_truths=[processed_gts[i] for i in valid_answer_claim_indices],
-                retrival_infos=[answer_claim_texts[i] for i in valid_answer_claim_indices],
+                ground_truths=[processed_gts[i] for i in valid_summary_indices],
+                retrival_infos=[summaries[i] for i in valid_summary_indices],
             )
         )
-        for idx, raw_score in zip(valid_answer_claim_indices, raw_answer_claim_scores):
-            answer_claim_scores[idx] = ANSWER_CLAIM_REWARD_WEIGHT * raw_score
+        for idx, raw_score in zip(valid_summary_indices, raw_summary_scores):
+            summary_entailment_scores[idx] = SUMMARY_ENTAILMENT_REWARD_WEIGHT * raw_score
 
-    return format_scores, answer_claim_scores, bridge_scores
+    return summary_entailment_scores
 
 
 
@@ -389,8 +386,7 @@ def batched_compute_score_f1_ver(
 
     reward_mode = get_reward_mode()
     if reward_mode == "custom":
-        format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
-            solution_strs=solution_strs,
+        summary_entailment_scores = compute_summary_entailment_scores(
             summaries=summaries,
             processed_gts=processed_gts,
             retrival_eval_model=retrival_eval_model,
@@ -410,6 +406,8 @@ def batched_compute_score_f1_ver(
         f1_value = 0.
         process_score = 0.
         search_score = 0.
+        format_score_value = 0.0
+        gated_summary_score = 0.0
 
         if reward_mode == "upstream":
             if answer is None or summary is None:
@@ -428,13 +426,16 @@ def batched_compute_score_f1_ver(
             if answer is None:
                 rd_score = 0
             else:
+                if has_valid_role_format(summary, answer):
+                    format_score_value = ROLE_FORMAT_REWARD_WEIGHT
                 f1_value = f1_check(answer, ground_truth)
                 if f1_value > 0:
                     rd_score = score * f1_value
+                    gated_summary_score = f1_value * summary_entailment_scores[i]
                 else:
                     rd_score = format_score
-                process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
-                search_score = answer_claim_scores[i]
+                process_score = format_score_value + gated_summary_score
+                search_score = gated_summary_score
                 rd_score += process_score
 
         save_results_to_file(
@@ -458,9 +459,8 @@ def batched_compute_score_f1_ver(
             print(f"F1 value: {f1_value}")
             print(f"Reward_mode: {reward_mode}")
             if reward_mode == "custom":
-                print(f"Format_score: {format_scores[i]}")
-                print(f"Answer_claim_score: {answer_claim_scores[i]}")
-                print(f"Bridge_score: {bridge_scores[i]}")
+                print(f"Format_score: {format_score_value}")
+                print(f"Summary_entailment_score: {gated_summary_score}")
             else:
                 print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")
@@ -503,8 +503,7 @@ def batched_compute_score_em_ver(
 
     reward_mode = get_reward_mode()
     if reward_mode == "custom":
-        format_scores, answer_claim_scores, bridge_scores = compute_process_rewards(
-            solution_strs=solution_strs,
+        summary_entailment_scores = compute_summary_entailment_scores(
             summaries=summaries,
             processed_gts=processed_gts,
             retrival_eval_model=retrival_eval_model,
@@ -523,6 +522,8 @@ def batched_compute_score_em_ver(
         rd_score = 0.
         process_score = 0.
         search_score = 0.
+        format_score_value = 0.0
+        gated_summary_score = 0.0
 
         if reward_mode == "upstream":
             if answer is None or summary is None:
@@ -540,12 +541,15 @@ def batched_compute_score_em_ver(
             if answer is None:
                 rd_score = 0
             else:
+                if has_valid_role_format(summary, answer):
+                    format_score_value = ROLE_FORMAT_REWARD_WEIGHT
                 if em_check(answer, ground_truth):
                     rd_score = score # 1.0
+                    gated_summary_score = summary_entailment_scores[i]
                 else:
                     rd_score = format_score # 0.0
-                process_score = format_scores[i] + answer_claim_scores[i] + bridge_scores[i]
-                search_score = answer_claim_scores[i]
+                process_score = format_score_value + gated_summary_score
+                search_score = gated_summary_score
                 rd_score += process_score
 
         save_results_to_file(
@@ -567,9 +571,8 @@ def batched_compute_score_em_ver(
             print(f"Score: {rd_score}")
             print(f"Reward_mode: {reward_mode}")
             if reward_mode == "custom":
-                print(f"Format_score: {format_scores[i]}")
-                print(f"Answer_claim_score: {answer_claim_scores[i]}")
-                print(f"Bridge_score: {bridge_scores[i]}")
+                print(f"Format_score: {format_score_value}")
+                print(f"Summary_entailment_score: {gated_summary_score}")
             else:
                 print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")

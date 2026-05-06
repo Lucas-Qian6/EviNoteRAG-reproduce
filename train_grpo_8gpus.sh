@@ -4,16 +4,18 @@ export PET_NODE_RANK=0
 export NCCL_BLOCKING_WAIT=1  
 export NCCL_IB_DISABLE=0  
 export NCCL_SOCKET_IFNAME=eth0  
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Use Ray via the active Python interpreter so a stale shebang does not break the run.
 python3 -m ray.scripts.scripts start --head || true
 
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='4_tool_uses'
+EXPERIMENT_NAME='5_add_focus'
 
 # upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"
+export SUMMARY_ENTAILMENT_REWARD_WEIGHT="${SUMMARY_ENTAILMENT_REWARD_WEIGHT:-0.2}"
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
@@ -29,10 +31,11 @@ export TRAIN_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_train_trajectories.jsonl
 export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 
 echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
+echo "SUMMARY_ENTAILMENT_REWARD_WEIGHT=${SUMMARY_ENTAILMENT_REWARD_WEIGHT}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_dotraining4.parquet \
-    data.val_files=./data_preprocess/data/m_test_dotraining4.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining5.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining5.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=294 \

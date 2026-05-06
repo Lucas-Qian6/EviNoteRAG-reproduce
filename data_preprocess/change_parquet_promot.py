@@ -1,6 +1,4 @@
 import os
-import glob
-import pandas as pd
 import pyarrow.parquet as pq
 import pyarrow as pa
 
@@ -33,29 +31,24 @@ def process_prompt(prompt_array, question, prefix_func):
         print(f"❌ Error occurred while processing prompt: {e}")
         return prompt_array  # Return the original data to avoid task failure
 
-def process_parquet_files(input_dir, output_dir, prefix_func=default_prefix_func):
+def process_parquet_files(file_pairs, prefix_func=default_prefix_func):
     """
-    Automated processing of Parquet files (pure Python implementation)
+    Process selected Parquet files and write prompt-updated outputs.
     
     Args:
-        input_dir (str): Input directory path
-        output_dir (str): Output directory path
+        file_pairs (list): List of (input_file, output_file) pairs
         prefix_func (function): Custom prefix handling function
     """
     try:
-        # Recursively find all Parquet files
-        file_paths = glob.glob(os.path.join(input_dir, "**/*.parquet"), recursive=True)
-        if not file_paths:
-            print("⚠️ No Parquet files found")
+        if not file_pairs:
+            print("⚠️ No Parquet files configured")
             return
 
-        for file_path in file_paths:
-            # Construct output path
-            relative_path = os.path.relpath(file_path, input_dir)
-            base_name, _ = os.path.splitext(relative_path)
-            # output_file = os.path.join(output_dir, f"{base_name}_p.parquet")
-            output_file = os.path.join(output_dir, f"{base_name}_dotraining4.parquet")
-            
+        for file_path, output_file in file_pairs:
+            if not os.path.exists(file_path):
+                print(f"⚠️ Skipping missing file: {file_path}")
+                continue
+
             # Create output directories
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
             
@@ -154,8 +147,9 @@ if __name__ == "__main__":
     You are an Information Retrieval Agent. Use the search tool to find evidence before answering.
 
     ## Tools
-    You have three tools:
+    You have four tools:
     - `<search>query</search>`: search for information.
+    - `<focus>evidence focus</focus>`: identify what downstream reasoning should focus on after reading retrieved claims.
     - `<relate>claim relations</relate>`: record claim-level relations and resolutions.
     - `<summary>tagged notes</summary>`: write tagged resolved notes.
 
@@ -166,22 +160,27 @@ if __name__ == "__main__":
     C1 [Doc1]: ...
     C2 [Doc2]: ...
 
-    After each `<information>`, follow these steps using the tools:
+    After each `<information>`, follow these steps:
 
-    ### Step 1: Filter (think before calling a tool)
-    Drop claims that are irrelevant to the question.
+    ### Step 1: Focus → `<focus>...</focus>`
+    Compare the original question with the retrieved claims and identify what downstream reasoning should focus on.
 
+    Inside `<focus>`:
+    - State the answer-relevant fact(s) needed from the retrieved claims.
+    - State any bridge connection needed to connect the question to the answer.
+    - Do not provide the final answer.
+    
     ### Step 2: Relate and Resolve → `<relate>...</relate>`
-    For relevant claims, compare them and write the resolution inside `<relate>`:
+    Using `<focus>`, compare claims and write the resolution inside `<relate>`:
 
-    1. **Merge**: two or more claims state the same or overlapping facts.
-    → combine into one note, keep the most specific version, cite all sources.
+    1. **Merge**: two or more focused claims state the same or overlapping facts.
+    → combine into one claim, keep the most specific version, cite all sources.
     Example:
     C1 [Doc1]: The Eiffel Tower is 330 meters tall.
     C4 [Doc2]: The Eiffel Tower has a height of 330 m.
     Output: Merge: C1+C4 → The Eiffel Tower is 330 meters tall. [Doc1, Doc2]
 
-    2. **Conflict**: two claims give incompatible facts about the same attribute.
+    2. **Conflict**: two focused claims give incompatible facts about the same answer-relevant attribute.
     → keep both values, mark as unresolved.
     Example:
     C2 [Doc1]: The bridge opened in 1937.
@@ -189,39 +188,43 @@ if __name__ == "__main__":
     Output: Conflict: C2 vs C5 → Opening year 1937 [Doc1] vs 1936 [Doc3].
 
     Claims that have no overlap with others need no label — just keep them as-is.
-    Example: Kept: C3 [Doc2] (no overlap).
 
-    ### Step 3: Tag Resolved Notes → `<summary>...</summary>`
-    Write each resolved note inside `<summary>`, tagged with one of:
-    - `*Answer*`: a concise fact that directly answers (part of) the question. Keep it short.
-    - `*Bridge*`: an intermediate fact needed to connect the question to the answer (multi-hop only). Skip if the question is single-hop.
-    - `-Noise/Uncertain-`: a conflict from the relate step that affects the answer. Include both values so the next search can target it.
+    ### Step 3: Tag Summary → `<summary>...</summary>`
+    Using both `<focus>` and `<relate>`, write only the focused resolved claims needed to derive the final answer inside `<summary>`, tagged with one of:
+    - `*Answer*`: a concise claim that directly answers (part of) the question. Keep it short.
+    - `*Bridge*`: an intermediate claim needed to connect the question to the answer. Skip if no bridge is needed.
+    - `-Uncertain-`: an unresolved conflict that affects the answer. Include both values so the next search can target it.
 
     Example:
     *Answer* The Eiffel Tower is 330 meters tall. [Doc1, Doc2]
     *Bridge* The Eiffel Tower is located in Paris. [Doc3]
-    -Noise/Uncertain- Opening year conflict: 1937 [Doc1] vs 1936 [Doc3].
+    -Uncertain- Opening year conflict: 1937 [Doc1] vs 1936 [Doc3].
 
     ## Search Strategy
-    Before issuing each new search:
-    1. Break the original question into sub-questions.
-    2. Review `*Answer*` and `*Bridge*` notes accumulated across all previous summaries.
-    3. Identify the least-covered sub-question.
-    4. Write a query targeting exactly that gap.
+    After each `<summary>`, decide whether to search again or answer:
+    - Search again if a required answer or bridge fact is missing.
+    - Search again if a `-Uncertain-` conflict affects the final answer.
 
-    If a `-Noise/Uncertain-` conflict affects the answer, search to resolve it.
 
     ## Format Rules
-    - After each `<information>`, call `<relate>` first, then `<summary>`.
-    - When ready, submit inside `<answer></answer>`.
+    - Start by calling `<search>...</search>`.
+    - After each `<information>`, call `<focus>` first, then `<relate>`, then `<summary>`.
+    - After `<summary>`, either call `<search>...</search>` again or output `<answer>...</answer>`.
+    - Only output the final answer inside `<answer></answer>`. Do not include explanations, reasoning, or extra text.
     - If it is a yes/no question, respond only with `yes` or `no`.
-    - Answer must be in English.
-    - No searches allowed after answer submission.
+    - Always follow this format strictly.
+    - **Answer must be in English. Only English responses will be accepted.**
+    Note: No searches allowed after answer submission. So avoid answering when uncertain – verify accuracy thoroughly before answering
 
     Question: {question}
     """
 
-    input_directory = "./data/"
-    output_directory = "./data/"
+    # Rename generated files here.
+    output_suffix = "dotraining5"
 
-    process_parquet_files(input_directory, output_directory, my_custom_prefix)
+    file_pairs = [
+        ("./data/m_train.parquet", f"./data/m_train_{output_suffix}.parquet"),
+        ("./data/m_test.parquet", f"./data/m_test_{output_suffix}.parquet"),
+    ]
+
+    process_parquet_files(file_pairs, my_custom_prefix)

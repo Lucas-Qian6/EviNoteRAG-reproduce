@@ -96,7 +96,7 @@ class LLMGenerationManager:
             padding="longest"
         )['input_ids']
 
-    _STOP_TAGS = ('</search>', '</answer>', '</relate>', '</summary>')
+    _STOP_TAGS = ('</search>', '</answer>', '</focus>', '</relate>', '</summary>')
 
     def _find_earliest_stop(self, text: str) -> str:
         """Cut *text* at the earliest recognised closing tag."""
@@ -523,6 +523,8 @@ class LLMGenerationManager:
         else:
             search_results = [''] * sum([1 for action in cur_actions if action == 'search'])
 
+        empty_obs = pad_token if pad_token is not None else ''
+
         for i, (action, active) in enumerate(zip(cur_actions, active_mask)):
             
             if not active:
@@ -544,19 +546,25 @@ class LLMGenerationManager:
                     dones.append(0)
                     valid_action.append(1)
                     is_search.append(1)
+                elif action == 'focus':
+                    next_obs.append(empty_obs)
+                    dones.append(0)
+                    valid_action.append(1)
+                    is_search.append(0)
                 elif action == 'relate':
-                    next_obs.append('\nRelations recorded. Now tag each resolved note and write the summary.\n')
+                    next_obs.append(empty_obs)
                     dones.append(0)
                     valid_action.append(1)
                     is_search.append(0)
                 elif action == 'summary':
-                    next_obs.append('\nSummary recorded. Continue searching or provide the final answer.\n')
+                    next_obs.append(empty_obs)
                     dones.append(0)
                     valid_action.append(1)
                     is_search.append(0)
                 else:
                     next_obs.append(f'\nMy previous action is invalid. \
     If I want to search, I should put the query between <search> and </search>. \
+    If I want to focus retrieved evidence, I should put it between <focus> and </focus>. \
     If I want to give the final answer, I should put the answer between <answer> and </answer>. Let me try again.\n')
                     dones.append(0)
                     valid_action.append(0)
@@ -568,7 +576,7 @@ class LLMGenerationManager:
 
 
     _ACTION_PATTERN = re.compile(
-        r'<(search|answer|relate|summary)>(.*?)</\1>', re.DOTALL
+        r'<(search|answer|focus|relate|summary)>(.*?)</\1>', re.DOTALL
     )
 
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:

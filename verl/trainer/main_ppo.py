@@ -40,6 +40,7 @@ def main(config):
             'EVAL_TRAJECTORY_LOG_FILE',
             'EVINOTE_REWARD_MODE',
             'ROLE_FORMAT_REWARD_WEIGHT',
+            'SUMMARY_ENTAILMENT_REWARD_WEIGHT',
             'ANSWER_CLAIM_REWARD_WEIGHT',
             'BRIDGE_REWARD_WEIGHT',
             'VLLM_ATTENTION_BACKEND',

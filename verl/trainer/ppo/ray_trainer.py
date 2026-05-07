@@ -472,7 +472,6 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
-            decompose_claims = self.config.retriever.decompose_claims,
         )
 
         # print(f"[validate] torch.cuda.is_available(): {torch.cuda.is_available()}")
@@ -609,7 +608,6 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
-            decompose_claims = self.config.retriever.decompose_claims,
         )
 
 
@@ -896,7 +894,6 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
-            decompose_claims = self.config.retriever.decompose_claims,
         )
 
 

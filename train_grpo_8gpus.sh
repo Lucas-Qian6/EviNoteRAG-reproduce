@@ -11,11 +11,12 @@ python3 -m ray.scripts.scripts start --head || true
 
 export BASE_MODEL='/mnt/finder/qyj/models/Qwen2.5-7B-Instruct'
 WAND_PROJECT='EviNoteRAG'
-EXPERIMENT_NAME='5_add_focus'
+EXPERIMENT_NAME='6_claim_workflow'
 
-# upstream: original Da1yuqin/EviNoteRAG reward; custom: role-aware process reward.
+# upstream: original Da1yuqin/EviNoteRAG reward; custom: claim-faithfulness process reward.
 export EVINOTE_REWARD_MODE="${EVINOTE_REWARD_MODE:-custom}"
-export SUMMARY_ENTAILMENT_REWARD_WEIGHT="${SUMMARY_ENTAILMENT_REWARD_WEIGHT:-0.2}"
+export ROLE_FORMAT_REWARD_WEIGHT="${ROLE_FORMAT_REWARD_WEIGHT:-0.05}"
+export CLAIM_ENTAILMENT_REWARD_WEIGHT="${CLAIM_ENTAILMENT_REWARD_WEIGHT:-0.0}"
 
 # Resume actor weights from a previous checkpoint.
 # BASE_MODEL must remain the original model because it is used as the ref policy.
@@ -31,11 +32,12 @@ export TRAIN_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_train_trajectories.jsonl
 export EVAL_TRAJECTORY_LOG_FILE="${OUTPUT_DIR}/${DATE}_eval_trajectories.jsonl"
 
 echo "EVINOTE_REWARD_MODE=${EVINOTE_REWARD_MODE}"
-echo "SUMMARY_ENTAILMENT_REWARD_WEIGHT=${SUMMARY_ENTAILMENT_REWARD_WEIGHT}"
+echo "ROLE_FORMAT_REWARD_WEIGHT=${ROLE_FORMAT_REWARD_WEIGHT}"
+echo "CLAIM_ENTAILMENT_REWARD_WEIGHT=${CLAIM_ENTAILMENT_REWARD_WEIGHT}"
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_dotraining5.parquet \
-    data.val_files=./data_preprocess/data/m_test_dotraining5.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining6.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining6.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=294 \
@@ -88,5 +90,4 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    retriever.decompose_claims=true \
     2>&1 | tee ${OUTPUT_DIR}/${DATE}.log 

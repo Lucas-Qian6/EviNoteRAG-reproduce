@@ -65,7 +65,6 @@ class GenerationConfig:
     no_think_rl: bool=False
     search_url: str = None
     topk: int = 3
-    decompose_claims: bool = False
 
 class LLMGenerationManager:
     def __init__(
@@ -96,7 +95,14 @@ class LLMGenerationManager:
             padding="longest"
         )['input_ids']
 
-    _STOP_TAGS = ('</search>', '</answer>', '</focus>', '</relate>', '</summary>')
+    _STOP_TAGS = (
+        '</search>',
+        '</answer>',
+        '</decompose>',
+        '</relate>',
+        '</resolve>',
+        '</summary>',
+    )
 
     def _find_earliest_stop(self, text: str) -> str:
         """Cut *text* at the earliest recognised closing tag."""
@@ -540,23 +546,11 @@ class LLMGenerationManager:
                     is_search.append(0)
                 elif action == 'search':
                     raw_result = search_results.pop(0).strip()
-                    if self.config.decompose_claims:
-                        raw_result = self._decompose_to_claims(raw_result)
                     next_obs.append(f'\n\n<information>{raw_result}</information>\n\n')
                     dones.append(0)
                     valid_action.append(1)
                     is_search.append(1)
-                elif action == 'focus':
-                    next_obs.append(empty_obs)
-                    dones.append(0)
-                    valid_action.append(1)
-                    is_search.append(0)
-                elif action == 'relate':
-                    next_obs.append(empty_obs)
-                    dones.append(0)
-                    valid_action.append(1)
-                    is_search.append(0)
-                elif action == 'summary':
+                elif action in ('decompose', 'relate', 'resolve', 'summary'):
                     next_obs.append(empty_obs)
                     dones.append(0)
                     valid_action.append(1)
@@ -564,7 +558,7 @@ class LLMGenerationManager:
                 else:
                     next_obs.append(f'\nMy previous action is invalid. \
     If I want to search, I should put the query between <search> and </search>. \
-    If I want to focus retrieved evidence, I should put it between <focus> and </focus>. \
+    If I want to decompose, relate, resolve, or summarize claims, I should use the matching XML tag. \
     If I want to give the final answer, I should put the answer between <answer> and </answer>. Let me try again.\n')
                     dones.append(0)
                     valid_action.append(0)
@@ -576,7 +570,7 @@ class LLMGenerationManager:
 
 
     _ACTION_PATTERN = re.compile(
-        r'<(search|answer|focus|relate|summary)>(.*?)</\1>', re.DOTALL
+        r'<(search|answer|decompose|relate|resolve|summary)>(.*?)</\1>', re.DOTALL
     )
 
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
@@ -648,36 +642,3 @@ class LLMGenerationManager:
 
         return format_reference
 
-    @staticmethod
-    def _split_sentences(text: str) -> List[str]:
-        """Split text into sentences via regex, keeping the delimiter attached."""
-        parts = re.split(r'(?<=[.!?])\s+', text.strip())
-        return [s.strip() for s in parts if s.strip()]
-
-    def _decompose_to_claims(self, passages_string: str) -> str:
-        """Decompose a formatted passages string into labeled atomic claims
-        using sentence splitting.
-
-        Input format  (from _passages2string):
-            Doc 1(Title: Foo) some text.\n
-            Doc 2(Title: Bar) more text.\n
-
-        Output format:
-            C1 [Doc1]: first sentence of doc 1.
-            C2 [Doc1]: second sentence of doc 1.
-            C3 [Doc2]: first sentence of doc 2.
-            ...
-        """
-        doc_pattern = re.compile(
-            r'Doc\s+(\d+)\(Title:\s*(.*?)\)\s*(.*?)(?=Doc\s+\d+\(Title:|$)',
-            re.DOTALL,
-        )
-        claim_idx = 1
-        claims = []
-        for m in doc_pattern.finditer(passages_string):
-            doc_id = m.group(1)
-            text = m.group(3).strip()
-            for sent in self._split_sentences(text):
-                claims.append(f"C{claim_idx} [Doc{doc_id}]: {sent}")
-                claim_idx += 1
-        return "\n".join(claims)

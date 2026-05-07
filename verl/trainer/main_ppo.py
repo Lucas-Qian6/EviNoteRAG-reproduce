@@ -41,6 +41,7 @@ def main(config):
             'EVINOTE_REWARD_MODE',
             'ROLE_FORMAT_REWARD_WEIGHT',
             'SUMMARY_ENTAILMENT_REWARD_WEIGHT',
+            'CLAIM_ENTAILMENT_REWARD_WEIGHT',
             'ANSWER_CLAIM_REWARD_WEIGHT',
             'BRIDGE_REWARD_WEIGHT',
             'VLLM_ATTENTION_BACKEND',

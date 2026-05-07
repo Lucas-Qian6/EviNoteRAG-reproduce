@@ -27,8 +27,8 @@ export TRAIN_TRAJECTORY_LOG_FILE="${EVAL_TRAJECTORY_LOG_FILE}"
 
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
-    data.train_files=./data_preprocess/data/m_train_searchr1.parquet \
-    data.val_files=./data_preprocess/data/m_test_searchr1.parquet \
+    data.train_files=./data_preprocess/data/m_train_dotraining6.parquet \
+    data.val_files=./data_preprocess/data/m_test_dotraining6.parquet \
     data.train_data_num=null \
     data.val_data_num=null \
     data.train_batch_size=300 \
@@ -76,9 +76,8 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.total_epochs=1 \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=/root/verl_checkpoints/$EXPERIMENT_NAME \
-    max_turns=4 \
+    max_turns=8 \
     actor_rollout_ref.rollout.n_agent=5 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
     retriever.topk=3 \
-    retriever.decompose_claims=true \
     2>&1 | tee ${OUTPUT_DIR}/${DATE}.log 

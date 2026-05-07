@@ -33,6 +33,12 @@ SUMMARY_ENTAILMENT_REWARD_WEIGHT = float(
         os.environ.get("ANSWER_CLAIM_REWARD_WEIGHT", "0.1"),
     )
 )
+CLAIM_ENTAILMENT_REWARD_WEIGHT = float(
+    os.environ.get(
+        "CLAIM_ENTAILMENT_REWARD_WEIGHT",
+        os.environ.get("SUMMARY_ENTAILMENT_REWARD_WEIGHT", "0.2"),
+    )
+)
 BRIDGE_REWARD_WEIGHT = float(os.environ.get("BRIDGE_REWARD_WEIGHT", "0.0"))
 
 def get_reward_mode():
@@ -64,7 +70,7 @@ def compute_upstream_retrieval_scores(processed_gts, summaries, retrival_eval_mo
         )
     )
 
-def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None, trajectory_split="train"):
+def save_results_to_file(solution_str, answer_content, ground_truths, max_score, data_source=None, f1_score = 0.0, llm_judge_score= 0.0, Search_score= 0.0, retrival_eval_model = None, trajectory_split="train", claim_entailment_score=0.0):
     """Save each training trajectory as one JSONL row."""
     try:
         if trajectory_split == "skip":
@@ -86,6 +92,7 @@ def save_results_to_file(solution_str, answer_content, ground_truths, max_score,
             "f1_score": f1_score,
             "llm_judge_score": llm_judge_score,
             "Search_score": Search_score,
+            "claim_entailment_score": claim_entailment_score,
             "data_source":data_source,
             "split": trajectory_split,
         }
@@ -154,7 +161,33 @@ def has_role_claim(summary, role):
 def has_valid_role_format(summary, answer=None):
     if answer is None or not isinstance(summary, str):
         return False
-    return has_role_claim(summary, "*Answer*")
+    has_query_usage_note = bool(
+        re.search(r'(?m)^\s*N\d+\s*\([^)]+\)\s*:\s*\S+', summary)
+    )
+    return has_role_claim(summary, "*Answer*") or has_query_usage_note
+
+
+def has_valid_claim_workflow_format(solution_str):
+    """Check for a relaxed ordered search -> information -> decompose -> relate -> resolve -> summary flow."""
+    if not isinstance(solution_str, str) or not solution_str.strip():
+        return False
+
+    ordered_patterns = [
+        r'<search>.*?</search>',
+        r'<information>.*?</information>',
+        r'<decompose>.*?</decompose>',
+        r'<relate>.*?</relate>',
+        r'<resolve>.*?</resolve>',
+        r'<summary>.*?</summary>',
+    ]
+    cursor = 0
+    for pattern in ordered_patterns:
+        match = re.search(pattern, solution_str[cursor:], re.DOTALL | re.IGNORECASE)
+        if not match:
+            return False
+        cursor += match.end()
+
+    return True
 
 
 def compute_summary_entailment_scores(summaries, processed_gts, retrival_eval_model):
@@ -179,6 +212,118 @@ def compute_summary_entailment_scores(summaries, processed_gts, retrival_eval_mo
             summary_entailment_scores[idx] = SUMMARY_ENTAILMENT_REWARD_WEIGHT * raw_score
 
     return summary_entailment_scores
+
+
+def extract_information_decompose_pairs(solution_str):
+    """Pair each <decompose> block with the most recent preceding <information> block."""
+    if not isinstance(solution_str, str) or not solution_str.strip():
+        return []
+
+    information_matches = list(
+        re.finditer(r'<information>(.*?)</information>', solution_str, re.DOTALL | re.IGNORECASE)
+    )
+    pairs = []
+    for decompose_match in re.finditer(
+        r'<decompose>(.*?)</decompose>', solution_str, re.DOTALL | re.IGNORECASE
+    ):
+        preceding_information = [
+            match for match in information_matches if match.end() <= decompose_match.start()
+        ]
+        if preceding_information:
+            pairs.append((preceding_information[-1].group(1).strip(), decompose_match.group(1).strip()))
+
+    return pairs
+
+
+def parse_information_docs(information):
+    """Parse retrieved evidence formatted as Doc 1(Title: ...) text."""
+    docs = {}
+    if not isinstance(information, str) or not information.strip():
+        return docs
+
+    doc_pattern = re.compile(
+        r'Doc\s*(\d+)\s*\(Title:\s*(.*?)\)\s*(.*?)(?=\n?Doc\s*\d+\s*\(Title:|$)',
+        re.DOTALL | re.IGNORECASE,
+    )
+    for match in doc_pattern.finditer(information):
+        doc_id = match.group(1).strip()
+        title = re.sub(r'\s+', ' ', match.group(2)).strip()
+        text = re.sub(r'\s+', ' ', match.group(3)).strip()
+        docs[doc_id] = f"{title}. {text}" if title else text
+
+    return docs
+
+
+def parse_decomposed_claims(decompose_block):
+    """Extract claims like C1 [Doc1]: claim text, allowing multiline claim text."""
+    claims = []
+    if not isinstance(decompose_block, str) or not decompose_block.strip():
+        return claims
+
+    claim_pattern = re.compile(
+        r'^\s*(?:[-*]\s*)?C\d+\s*\[\s*Doc\s*(\d+)\s*\]\s*:\s*(.*?)(?=^\s*(?:[-*]\s*)?C\d+\s*\[\s*Doc\s*\d+\s*\]\s*:|\Z)',
+        re.IGNORECASE | re.MULTILINE | re.DOTALL,
+    )
+    for match in claim_pattern.finditer(decompose_block):
+        doc_id = match.group(1).strip()
+        claim = re.sub(r'\s+', ' ', match.group(2)).strip()
+        if claim:
+            claims.append((doc_id, claim))
+
+    return claims
+
+
+def build_claim_entailment_pairs(solution_str):
+    """Build (claim, source evidence) pairs from all information/decompose turns."""
+    claim_evidence_pairs = []
+    for information, decompose_block in extract_information_decompose_pairs(solution_str):
+        docs = parse_information_docs(information)
+        fallback_evidence = re.sub(r'\s+', ' ', information).strip()
+        for doc_id, claim in parse_decomposed_claims(decompose_block):
+            evidence = docs.get(doc_id, fallback_evidence)
+            if claim and evidence:
+                claim_evidence_pairs.append((claim, evidence))
+
+    return claim_evidence_pairs
+
+
+def compute_claim_decompose_entailment_scores(solution_strs, retrival_eval_model):
+    """Reward decomposed claims that are entailed by their source evidence."""
+    n = len(solution_strs)
+    claim_entailment_scores = [0.0] * n
+    if retrival_eval_model is None or CLAIM_ENTAILMENT_REWARD_WEIGHT <= 0:
+        return claim_entailment_scores
+
+    flat_claims = []
+    flat_evidences = []
+    index_mapping = []
+    for idx, solution_str in enumerate(solution_strs):
+        for claim, evidence in build_claim_entailment_pairs(solution_str):
+            index_mapping.append(idx)
+            flat_claims.append(claim)
+            flat_evidences.append(evidence)
+
+    if not flat_claims:
+        return claim_entailment_scores
+
+    raw_scores = ray.get(
+        retrival_eval_model.batch_retrival_score_fast.remote(
+            ground_truths=flat_claims,
+            retrival_infos=flat_evidences,
+        )
+    )
+
+    grouped_scores = [[] for _ in range(n)]
+    for idx, raw_score in zip(index_mapping, raw_scores):
+        grouped_scores[idx].append(raw_score)
+
+    for idx, scores in enumerate(grouped_scores):
+        if scores:
+            claim_entailment_scores[idx] = CLAIM_ENTAILMENT_REWARD_WEIGHT * (
+                sum(scores) / len(scores)
+            )
+
+    return claim_entailment_scores
 
 
 
@@ -386,9 +531,8 @@ def batched_compute_score_f1_ver(
 
     reward_mode = get_reward_mode()
     if reward_mode == "custom":
-        summary_entailment_scores = compute_summary_entailment_scores(
-            summaries=summaries,
-            processed_gts=processed_gts,
+        claim_entailment_scores = compute_claim_decompose_entailment_scores(
+            solution_strs=solution_strs,
             retrival_eval_model=retrival_eval_model,
         )
     else:
@@ -407,7 +551,7 @@ def batched_compute_score_f1_ver(
         process_score = 0.
         search_score = 0.
         format_score_value = 0.0
-        gated_summary_score = 0.0
+        claim_entailment_score = 0.0
 
         if reward_mode == "upstream":
             if answer is None or summary is None:
@@ -423,20 +567,20 @@ def batched_compute_score_f1_ver(
             search_score = batch_retrival_scores[i]
             rd_score += search_score
         else:
-            if answer is None:
-                rd_score = 0
-            else:
-                if has_valid_role_format(summary, answer):
+            claim_entailment_score = claim_entailment_scores[i]
+            if answer is not None:
+                if has_valid_claim_workflow_format(solution_str):
                     format_score_value = ROLE_FORMAT_REWARD_WEIGHT
                 f1_value = f1_check(answer, ground_truth)
                 if f1_value > 0:
                     rd_score = score * f1_value
-                    gated_summary_score = f1_value * summary_entailment_scores[i]
                 else:
                     rd_score = format_score
-                process_score = format_score_value + gated_summary_score
-                search_score = gated_summary_score
-                rd_score += process_score
+            else:
+                rd_score = 0
+            process_score = format_score_value + claim_entailment_score
+            search_score = claim_entailment_score
+            rd_score += process_score
 
         save_results_to_file(
             solution_str,
@@ -448,6 +592,7 @@ def batched_compute_score_f1_ver(
             llm_judge_score=process_score,
             Search_score=search_score,
             trajectory_split=trajectory_split,
+            claim_entailment_score=claim_entailment_score,
         )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
@@ -460,7 +605,7 @@ def batched_compute_score_f1_ver(
             print(f"Reward_mode: {reward_mode}")
             if reward_mode == "custom":
                 print(f"Format_score: {format_score_value}")
-                print(f"Summary_entailment_score: {gated_summary_score}")
+                print(f"Claim_entailment_score: {claim_entailment_score}")
             else:
                 print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")
@@ -503,9 +648,8 @@ def batched_compute_score_em_ver(
 
     reward_mode = get_reward_mode()
     if reward_mode == "custom":
-        summary_entailment_scores = compute_summary_entailment_scores(
-            summaries=summaries,
-            processed_gts=processed_gts,
+        claim_entailment_scores = compute_claim_decompose_entailment_scores(
+            solution_strs=solution_strs,
             retrival_eval_model=retrival_eval_model,
         )
     else:
@@ -523,7 +667,7 @@ def batched_compute_score_em_ver(
         process_score = 0.
         search_score = 0.
         format_score_value = 0.0
-        gated_summary_score = 0.0
+        claim_entailment_score = 0.0
 
         if reward_mode == "upstream":
             if answer is None or summary is None:
@@ -538,19 +682,19 @@ def batched_compute_score_em_ver(
             search_score = batch_retrival_scores[i]
             rd_score += search_score
         else:
-            if answer is None:
-                rd_score = 0
-            else:
-                if has_valid_role_format(summary, answer):
+            claim_entailment_score = claim_entailment_scores[i]
+            if answer is not None:
+                if has_valid_claim_workflow_format(solution_str):
                     format_score_value = ROLE_FORMAT_REWARD_WEIGHT
                 if em_check(answer, ground_truth):
                     rd_score = score # 1.0
-                    gated_summary_score = summary_entailment_scores[i]
                 else:
                     rd_score = format_score # 0.0
-                process_score = format_score_value + gated_summary_score
-                search_score = gated_summary_score
-                rd_score += process_score
+            else:
+                rd_score = 0
+            process_score = format_score_value + claim_entailment_score
+            search_score = claim_entailment_score
+            rd_score += process_score
 
         save_results_to_file(
             solution_str,
@@ -561,6 +705,7 @@ def batched_compute_score_em_ver(
             llm_judge_score=process_score,
             Search_score=search_score,
             trajectory_split=trajectory_split,
+            claim_entailment_score=claim_entailment_score,
         )
         if random.randint(1, 64) == 1:
             print(f"-------------- [train] ----------------")
@@ -572,7 +717,7 @@ def batched_compute_score_em_ver(
             print(f"Reward_mode: {reward_mode}")
             if reward_mode == "custom":
                 print(f"Format_score: {format_score_value}")
-                print(f"Summary_entailment_score: {gated_summary_score}")
+                print(f"Claim_entailment_score: {claim_entailment_score}")
             else:
                 print(f"Search_score: {search_score}")
             print(f"data_source: {data_source}")
